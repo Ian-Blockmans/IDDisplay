@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use std::thread::{self, Thread};
 
-static TMP_DIR_S: &str = "./tmp/";
+static TMP_DIR_S: &str = "./tmp/"; 
 static REC_TIME_S: u64 = 20;
 static EVERY_S: u64 = 600;
 static OS: &str = env::consts::OS;
