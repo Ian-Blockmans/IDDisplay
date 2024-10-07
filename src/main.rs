@@ -170,11 +170,18 @@ async fn startrecasy(s: Song) -> Song{
 }
 
 fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
-
-    let output = Command::new("./py-venv/bin/python")
-        .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
-//        .args(["ShazamIO.py", "song.wav"])
-        .output()?;
+    let output: std::process::Output;
+    if OS == "windows" {
+        output = Command::new("./win-py-venv/Scripts/python.exe")
+            .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
+//            .args(["ShazamIO.py", "song.wav"])
+            .output()?;
+    } else {
+        output = Command::new("./lx-py-venv/bin/python")
+            .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
+//            .args(["ShazamIO.py", "song.wav"])
+            .output()?;
+    }
     let pyerrout = str::from_utf8(&output.stderr).unwrap();
     if pyerrout.is_empty(){
         let jstring = str::from_utf8(&output.stdout)?.to_string();
