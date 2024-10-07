@@ -1,6 +1,7 @@
 use core::str;
 use std::process::Command;
 use std::str::Utf8Error;
+use std::env;
 use iced::{Font, Subscription, Task};
 use iced::time::{self, Duration, Instant};
 use serde_json::Value;
@@ -18,12 +19,16 @@ use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use std::thread::{self, Thread};
 
-static TMP_DIR_S: &str = ".\\tmp\\";
-static REC_TIME_S: u64 = 8;
+static TMP_DIR_S: &str = "./tmp/";
+static REC_TIME_S: u64 = 20;
 static EVERY_S: u64 = 600;
+static OS: &str = env::consts::OS;
 
 
 fn main() -> Result<(), anyhow::Error> {
+    println!("OS: {}", OS);
+    let path = env::current_dir()?;
+    println!("The current directory is {}", path.display());
     if fs::exists(TMP_DIR_S)? {
         remove_dir_all(TMP_DIR_S)?;
     }
@@ -130,16 +135,17 @@ impl Song {
 
         let trackname = text(self.track_name.clone())
             .font(titlefont)
-            .size(50);
+            .size(40);
         let artistname= text(self.artist_name.clone())
             .font(artistfont)
-            .size(50);
+            .size(30);
 
-        let coverart = iceimage(self.art.clone());
+        let coverart = iceimage(self.art.clone())
+            .width(300);
 
         let interface = column![
             column![ row![ detect, exit ].padding(5)],
-            column![ row![ column![trackname, artistname].padding(60), coverart ].align_y(Alignment::Center),]
+            column![ row![ column![trackname, artistname].padding(40).width(600), coverart ].align_y(Alignment::Center),]
                 .align_x(Alignment::Center)
                 .width(Length::Fill),
             ];
@@ -148,14 +154,15 @@ impl Song {
 }
 
 async fn startrecasy(s: Song) -> Song{
-//    let res = rec_wav(s.clone());
-//    if res.is_err(){
-//        panic!("{}", res.unwrap_err());
-//    }
+    let res = rec_wav(s.clone());
+    if res.is_err(){
+        panic!("{}", res.unwrap_err());
+    }
     let trackres = shazamrec(s);
     if trackres.is_ok(){
         trackres.unwrap()
     } else {
+        println!("{:?}",trackres);
         let mut songerror = Song::default();
         songerror.artist_name = "error".to_string();
         songerror
@@ -164,9 +171,9 @@ async fn startrecasy(s: Song) -> Song{
 
 fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
 
-    let output = Command::new("python")
-//        .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
-        .args(["ShazamIO.py", "song.wav"])
+    let output = Command::new("./py-venv/bin/python")
+        .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
+//        .args(["ShazamIO.py", "song.wav"])
         .output()?;
     let pyerrout = str::from_utf8(&output.stderr).unwrap();
     if pyerrout.is_empty(){
