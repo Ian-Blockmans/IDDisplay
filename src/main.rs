@@ -67,44 +67,6 @@ impl Song {
             }
             Message::Detect => {
                 iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
-            //old tread code
-                //let tempsongtop = Arc::new(Mutex::new(Song::default()));
-//
-                //let tempsong = Arc::clone(&tempsongtop);
-                //let rechandle = thread::spawn(move ||{
-                //    //let tempsong = tempsongtop.clone();
-                //    let s = startrec();
-                //    if s.track_name == Song::default().track_name{
-                //        tempsong.lock().unwrap().track_name = "No song detected.".to_string();
-                //    } else {
-                //        tempsong.lock().unwrap().track_name = s.track_name;
-                //        tempsong.lock().unwrap().artist_name = s.artist_name;
-                //        tempsong.lock().unwrap().art = s.art;
-                //    }
-                //});
-                //rechandle.join();
-                //self.track_name = tempsongtop.lock().unwrap().track_name.clone();
-                //self.artist_name = tempsongtop.lock().unwrap().artist_name.clone();
-                //self.art = tempsongtop.lock().unwrap().art.clone();
-
-            //old sequential code
-                //let res = rec_wav();
-                //if res.is_err(){
-                //    panic!("PANIC: Failed to record sound")
-                //}
-                //let trackres = shazamrec();
-                //if trackres.is_ok(){
-                //    let track = trackres.unwrap();
-                //    if track.track_name == Song::default().track_name{
-                //        self.track_name = "No song detected.".to_string();
-                //    } else {
-                //        self.track_name = track.track_name;
-                //        self.artist_name = track.artist_name;
-                //        self.art = track.art;
-                //    }
-                //} else {
-                //    self.track_name = "error".to_string();
-                //}
             }
             Message::Exit => {
                 panic!();
@@ -154,15 +116,15 @@ impl Song {
 }
 
 async fn startrecasy(s: Song) -> Song{
-    let res = rec_wav(s.clone());
+    let res = rec_wav(s.clone(), REC_TIME_S); //record audio
     if res.is_err(){
-        panic!("{}", res.unwrap_err());
+        panic!("{}", res.unwrap_err()); //panic when program fails to record audio
     }
-    let trackres = shazamrec(s);
+    let trackres = shazamrec(s); //try to recognize song
     if trackres.is_ok(){
-        trackres.unwrap()
+        trackres.unwrap() //return Song when shazamio worked as intended
     } else {
-        println!("{:?}",trackres);
+        println!("{:?}",trackres); //write error to songname if shazamio failed to execute
         let mut songerror = Song::default();
         songerror.artist_name = "error".to_string();
         songerror
@@ -170,7 +132,7 @@ async fn startrecasy(s: Song) -> Song{
 }
 
 fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
-    let output: std::process::Output;
+    let output: std::process::Output; // use the right python envirement for windows or linux
     if OS == "windows" {
         output = Command::new("./win-py-venv/Scripts/python.exe")
             .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
@@ -187,11 +149,11 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
         let jstring = str::from_utf8(&output.stdout)?.to_string();
         println!("song: {}", jstring);
         let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
-        if !shazam_json_p["track"]["title"].is_string(){
+        if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
             let mut nosong = Song::default();
             nosong.artist_name = "No song detected".to_string();
             Ok(nosong)
-        } else {
+        } else { // populate Song whit corect values
             let imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
             let song = Song{
                 track_name: shazam_json_p["track"]["title"].as_str().unwrap().to_string(),
@@ -232,7 +194,7 @@ struct Opt {
     jack: bool,
 }
 
-fn rec_wav(s: Song) -> Result<(), anyhow::Error>{
+fn rec_wav(s: Song, time_s: u64) -> Result<(), anyhow::Error>{
     let opt = Opt::parse();
 
     // Conditionally compile with jack if the feature is specified.
@@ -339,7 +301,7 @@ fn rec_wav(s: Song) -> Result<(), anyhow::Error>{
     stream.play()?;
 
     // Let recording go for roughly three seconds.
-    std::thread::sleep(std::time::Duration::from_secs(REC_TIME_S));
+    std::thread::sleep(std::time::Duration::from_secs(time_s));
     drop(stream);
     writer.lock().unwrap().take().unwrap().finalize()?;
     println!("Recording {} complete!", spath);
