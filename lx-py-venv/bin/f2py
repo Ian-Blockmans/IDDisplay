@@ -1,4 +1,4 @@
-#!/home/ian/music-diaplay/MusicDisplay/my-venv/bin/python
+#!/home/ian/Documents/music-display/MusicDisplay/lx-py-venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
