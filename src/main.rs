@@ -20,7 +20,7 @@ use anyhow::Result;
 use std::thread::{self, Thread};
 
 static TMP_DIR_S: &str = "./tmp/"; 
-static REC_TIME_S: u64 = 20;
+static REC_TIME_S: u64 = 3;
 static EVERY_S: u64 = 600;
 static OS: &str = env::consts::OS;
 
@@ -116,13 +116,28 @@ impl Song {
 }
 
 async fn startrecasy(s: Song) -> Song{
-    let res = rec_wav(s.clone(), REC_TIME_S); //record audio
-    if res.is_err(){
-        panic!("{}", res.unwrap_err()); //panic when program fails to record audio
+    let mut rectime = REC_TIME_S;
+    let mut rec = rec_wav(s.clone(), rectime); //record audio
+    if rec.is_err(){
+        panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
     }
-    let trackres = shazamrec(s); //try to recognize song
+    let mut trackres = shazamrec(s.clone()); //try to recognize song
     if trackres.is_ok(){
-        trackres.unwrap() //return Song when shazamio worked as intended
+        let mut tracksong = trackres.unwrap();
+        if tracksong.track_name == "nosong"{
+            while tracksong.track_name == "nosong"{
+                rectime *= 2;
+                rec = rec_wav(s.clone(), rectime); //record audio
+                if rec.is_err(){
+                    panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
+                }
+                trackres = shazamrec(s.clone()); //try to recognize song
+                tracksong = trackres.unwrap()
+            }
+            tracksong
+        } else {
+            tracksong //return Song when shazamio returned a song first try
+        }
     } else {
         println!("{:?}",trackres); //write error to songname if shazamio failed to execute
         let mut songerror = Song::default();
@@ -151,7 +166,7 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
         let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
         if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
             let mut nosong = Song::default();
-            nosong.artist_name = "No song detected".to_string();
+            nosong.track_name = "nosong".to_string();
             Ok(nosong)
         } else { // populate Song whit corect values
             let imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;

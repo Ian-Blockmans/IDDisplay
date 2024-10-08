@@ -7,34 +7,13 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'MusicDisplay'",
+            "name": "Debug",
+            "program": "${workspaceFolder}/target/debug/MusicDisplay",
             "cargo": {
                 "args": [
                     "build",
-                    "--bin=MusicDisplay",
-                    "--package=MusicDisplay"
                 ],
                 "filter": {
-                    "name": "MusicDisplay",
-                    "kind": "bin"
-                }
-            },
-            "args": [],
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "type": "lldb",
-            "request": "launch",
-            "name": "Debug unit tests in executable 'MusicDisplay'",
-            "cargo": {
-                "args": [
-                    "test",
-                    "--no-run",
-                    "--bin=MusicDisplay",
-                    "--package=MusicDisplay"
-                ],
-                "filter": {
-                    "name": "MusicDisplay",
                     "kind": "bin"
                 }
             },
