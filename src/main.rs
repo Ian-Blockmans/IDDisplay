@@ -265,7 +265,8 @@ async fn startrecasy(s: Song) -> Song{
 }
 
 fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
-    let mut output: std::process::Output = Command::new("").output()?; // use the right python envirement for windows or linux
+    let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
+    // use the right python envirement for windows or linux
     if OS == "windows" {
         output = Command::new("./win-py-venv/Scripts/python.exe")
             .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
