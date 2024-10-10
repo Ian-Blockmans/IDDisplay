@@ -5,7 +5,7 @@ use iced::border::{color, right};
 use iced::{color, settings, window, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
 use iced::time::{self, Duration, Instant};
 use serde_json::Value;
-use iced::{widget::{button, column, text, row, Column, Row, container}, Length, Settings, font, Font, Alignment};
+use iced::{widget::{button, column, text, row, Column, Row, container, overlay}, Length, Settings, font, Font, Alignment};
 use iced::widget::{Button, Image as IceImage};
 use iced::widget::image as iceimage;
 use hound;
@@ -220,6 +220,7 @@ impl Song {
         let coverart = iceimage(self.art.clone())
             .width(300);
 
+        over
         let interface = column![
             row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
@@ -270,8 +271,8 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
     } else {
-        output = Command::new("./lx-py-venv/bin/python")
-            .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
+        output = Command::new("./ShazamIO")
+            .args([(s.tmps.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
     }
