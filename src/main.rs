@@ -30,6 +30,7 @@ static REC_TIME_S: u64 = 3;
 static EVERY_S: u64 = 3600;
 static WAIT_REC: u64 = 5;
 static OS: &str = env::consts::OS;
+static TEXT_SIZE: u16 = 60;
 
 fn main() -> Result<(), anyhow::Error> {
     println!("OS: {}", OS);
@@ -176,11 +177,11 @@ impl Song {
         
         let trackname = text(self.track_name.clone())
             .font(CUSTOM_FONT)
-            .size(60)
+            .size(TEXT_SIZE)
             .center();
         let artistname= text(self.artist_name.clone())
 //            .font(artistfont)
-            .size(50)
+            .size(TEXT_SIZE - 10)
             .center();
 
         let coverart = iceimage(self.art.clone())
