@@ -270,7 +270,7 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
     } else {
-        output = Command::new("./ShazamIO")
+        output = Command::new("./lx-dist/ShazamIO/ShazamIO")
             .args([(s.tmps.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
