@@ -1,8 +1,8 @@
-use core::str;
+use core::{arch, str};
 use std::process::Command;
 use std::env;
 use iced::border::{color, right};
-use iced::{color, settings, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
+use iced::{color, settings, window, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
 use iced::time::{self, Duration, Instant};
 use serde_json::Value;
 use iced::{widget::{button, column, text, row, Column, Row, container}, Length, Settings, font, Font, Alignment};
@@ -53,7 +53,7 @@ fn main() -> Result<(), anyhow::Error> {
         .settings(set)
         .theme(Song::termtheme)
         .window_size(Size::new(800.0, 480.0))
-        .run()?;
+        .run_with(Song::startup)?;
     //iced::run("start", Song::update, Song::view)?;
     remove_dir_all(TMP_DIR_S)?;
     Ok(())
@@ -66,18 +66,35 @@ enum Message {
     DisplaySong(Song),
     Menu,
     Demo,
+    GetMainWinId,
+    StoreMainWinId(window::Id),
+    FullscreenExec(window::Id),
+    Fullscreen,
     Tick,
 }
 
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 struct Song{
     track_name: String,
     artist_name: String,
     art: String,
     tmps: String,
+    winid: window::Id,
 }
 
 impl Song {
+    fn default() -> Song {
+        Song{ 
+            track_name: "Track-name".to_string(),
+            artist_name: "Artistname".to_string(),
+            art: "./?.png".to_string(),
+            tmps: TMP_DIR_S.to_string(),
+            winid: window::Id::unique(),
+        }
+    }
+    fn startup() -> (Song, Task<Message>) {
+        (Song::default(), Task::done(Message::GetMainWinId))
+    }
     fn termtheme(&self) -> Theme {
         let terminal: iced::theme::Palette = iced::theme::Palette{
             background: Color{r: 0.0, g: 0.0, b:0.0, a: 1.0},
@@ -155,6 +172,19 @@ impl Song {
                 self.artist_name = "Artist Name".to_string();
                 self.art = "./?.png".to_string();
                 Task::none()
+            },
+            Message::FullscreenExec(id) => {
+                iced::window::change_mode(id, window::Mode::Fullscreen) //change window id to fullschreen
+            },
+            Message::Fullscreen => {
+                Task::done(Message::FullscreenExec(self.winid))
+            },
+            Message::GetMainWinId => {
+                window::get_oldest().map(|id| Message::StoreMainWinId(id.unwrap())) //get oldest id and pass to FullscreenExec
+            },
+            Message::StoreMainWinId(id) => {
+                self.winid = id;
+                Task::none()
             }
         }
     }
@@ -174,6 +204,9 @@ impl Song {
         let menu = button("menu")
             .on_press(Message::Menu)
             .style(Self::btntheme);
+        let fullscreen = button("Fullscreen")
+            .on_press(Message::Fullscreen)
+            .style(Self::btntheme);
         
         let trackname = text(self.track_name.clone())
             .font(CUSTOM_FONT)
@@ -188,7 +221,7 @@ impl Song {
             .width(300);
 
         let interface = column![
-            row![ column![ row![ detect,exit,demo ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
             ];
         interface
@@ -253,12 +286,11 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
             Ok(nosong)
         } else { // populate Song whit corect values
             let imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
-            let song = Song{
-                track_name: shazam_json_p["track"]["title"].as_str().unwrap().to_string(),
-                artist_name: shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string(),
-                art: imgpath,
-                tmps: s.tmps,
-            };
+            
+            let mut song = Song::default();
+            song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
+            song.artist_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
+            song.art = imgpath;
             Ok(song)
         }
     } else{
