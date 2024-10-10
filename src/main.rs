@@ -265,17 +265,24 @@ async fn startrecasy(s: Song) -> Song{
 }
 
 fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
-    let output: std::process::Output; // use the right python envirement for windows or linux
+    let mut output: std::process::Output = Command::new("").output()?; // use the right python envirement for windows or linux
     if OS == "windows" {
         output = Command::new("./win-py-venv/Scripts/python.exe")
             .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
-    } else {
-        output = Command::new("./lx-dist/ShazamIO/ShazamIO")
+    } else if OS == "linux" {
+        if ARCHITECTURE == "aarch64" {
+            output = Command::new("./lx-dist-aarch64/ShazamIO/ShazamIO")
             .args([(s.tmps.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
+        } else if ARCHITECTURE == "x86_64" {
+            output = Command::new("./lx-dist-x86_64/ShazamIO/ShazamIO")
+            .args([(s.tmps.clone()+"recorded.wav").as_str()])
+//            .args(["ShazamIO.py", "song.wav"])
+            .output()?;
+        }
     }
     let pyerrout = str::from_utf8(&output.stderr).unwrap();
     if pyerrout.is_empty(){
