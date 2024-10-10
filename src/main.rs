@@ -299,7 +299,7 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
             
             let mut song = Song::default();
             song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
-            song.artist_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
+            song.artist_name = shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string();
             song.art = imgpath;
             Ok(song)
         }
