@@ -176,11 +176,11 @@ impl Song {
         
         let trackname = text(self.track_name.clone())
             .font(CUSTOM_FONT)
-            .size(50)
+            .size(60)
             .center();
         let artistname= text(self.artist_name.clone())
 //            .font(artistfont)
-            .size(40)
+            .size(50)
             .center();
 
         let coverart = iceimage(self.art.clone())
