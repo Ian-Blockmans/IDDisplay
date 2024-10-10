@@ -1,12 +1,12 @@
 use core::str;
 use std::process::Command;
-use std::str::Utf8Error;
 use std::env;
-use iced::{Font, Subscription, Task};
+use iced::border::{color, right};
+use iced::{color, settings, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
 use iced::time::{self, Duration, Instant};
 use serde_json::Value;
-use iced::{widget::{button, column, text, row, Column, Row}, Length, Settings, font, Alignment};
-use iced::widget::Image as IceImage;
+use iced::{widget::{button, column, text, row, Column, Row, container}, Length, Settings, font, Font, Alignment};
+use iced::widget::{Button, Image as IceImage};
 use iced::widget::image as iceimage;
 use hound;
 use clap::Parser;
@@ -14,16 +14,22 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample};
 use tempfile::{tempdir, TempDir};
 use std::fs::{self, remove_file, remove_dir_all, create_dir, File};
-use std::io::BufWriter;
+use std::io::{BufWriter, Read};
 use std::sync::{Arc, Mutex};
 use anyhow::Result;
 use std::thread::{self, Thread};
 
+
+pub static CUSTOM_FONT: Font = Font::with_name("Less Perfect DOS VGA");
+pub mod bytes {
+    pub static CUSTOM_FONT: &[u8] = include_bytes!("../LessPerfectDOSVGA.ttf");
+}
+
 static TMP_DIR_S: &str = "./tmp/"; 
 static REC_TIME_S: u64 = 3;
-static EVERY_S: u64 = 600;
+static EVERY_S: u64 = 3600;
+static WAIT_REC: u64 = 5;
 static OS: &str = env::consts::OS;
-
 
 fn main() -> Result<(), anyhow::Error> {
     println!("OS: {}", OS);
@@ -33,8 +39,21 @@ fn main() -> Result<(), anyhow::Error> {
         remove_dir_all(TMP_DIR_S)?;
     }
     create_dir(TMP_DIR_S)?;
-    iced::application("ShazamDisplay", Song::update, Song::view).subscription(Song::songsubscription).run()?;
-    iced::run("start", Song::update, Song::view)?;
+    let fontbytes = bytes::CUSTOM_FONT;
+    let set = settings::Settings{
+        id: Some("app".to_string()),
+        fonts: vec![fontbytes.into()],
+        default_font: CUSTOM_FONT,
+        default_text_size: iced::Pixels(25.0),
+        antialiasing: false,
+    };
+    //iced::application("ShazamDisplay", Song::update, Song::view).subscription(Song::songsubscription).run()?; // run songsubscription EVERY_S as a tick
+    iced::application("ShazamDisplay", Song::update, Song::view)
+        .settings(set)
+        .theme(Song::termtheme)
+        .window_size(Size::new(800.0, 480.0))
+        .run()?;
+    //iced::run("start", Song::update, Song::view)?;
     remove_dir_all(TMP_DIR_S)?;
     Ok(())
 }
@@ -44,6 +63,8 @@ enum Message {
     Detect,
     Exit,
     DisplaySong(Song),
+    Menu,
+    Demo,
     Tick,
 }
 
@@ -56,9 +77,46 @@ struct Song{
 }
 
 impl Song {
+    fn termtheme(&self) -> Theme {
+        let terminal: iced::theme::Palette = iced::theme::Palette{
+            background: Color{r: 0.0, g: 0.0, b:0.0, a: 1.0},
+            text: Color{r: 0.12, g: 0.84, b:0.38, a: 1.0},
+            primary: Color{r: 0.1, g: 0.1, b:0.1, a: 1.0},
+            success: Color{r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+            danger: Color{r: 0.0, g: 0.0, b: 0.0, a: 1.0},
+        };
+        Theme::custom("Terminal".to_string(), terminal)
+    }
+    
+    fn btntheme(theme: &Theme, status: button::Status) -> button::Style {
+        let textcolor = theme.palette().text;
+        match status {
+            button::Status::Active => {
+                let style = button::Style {
+                    background: Some(Background::Color(Color{r: 0.0, g: 0.0, b:0.0, a: 1.0})),
+                    text_color: textcolor,
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                };
+                style
+            }
+            _ => {
+                let style = button::Style {
+                    background: Some(Background::Color(Color{r: 0.1, g: 0.1, b:0.1, a: 1.0})),
+                    text_color: textcolor,
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                };
+                style
+            }
+            //button::primary(theme, status),
+        }
+    }
+    
     fn songsubscription(&self) -> Subscription<Message>{
         time::every(Duration::from_secs(EVERY_S)).map(|_| Message::Tick)
     }
+    
     fn update(&mut self, message: Message) -> Task<Message>{
         self.tmps = TMP_DIR_S.to_string();
         match message {
@@ -69,53 +127,75 @@ impl Song {
                 iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
             }
             Message::Exit => {
-                panic!();
-                let id = iced::window::Id::unique();
-                let _task: Task<()> = iced::window::close(id);
-                Task::none()
+                iced::exit::<Message>()
+                //let id = iced::window::Id::unique();
+                //let _task: Task<()> = iced::window::close(id);
+                //Task::none()
             },
             Message::DisplaySong(song) => {
-                self.track_name = song.track_name;
-                self.artist_name = song.artist_name;
-                if self.track_name == "No song detected".to_string(){
-                    self.art = "".to_string();
-                } else {
-                    self.art = song.art.clone();
+                if song.track_name != "nosong" {
+                    self.track_name = song.track_name;
+                    self.artist_name = song.artist_name;
+                    if self.track_name == "No song detected".to_string(){
+                        self.art = "".to_string();
+                    } else {
+                        self.art = song.art.clone();
+                    }
+                    self.view();
                 }
-                self.view();
+                iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
+                //Task::none()
+            },
+            Message::Menu => {
                 Task::none()
             },
+            Message::Demo => {
+                self.track_name = "Track Name".to_string();
+                self.artist_name = "Artist Name".to_string();
+                self.art = "./?.png".to_string();
+                Task::none()
+            }
         }
     }
 
     fn view(&self) -> Column<Message>{
-        let titlefont = font::Font{family: font::Family::Name("Roboto"), weight: font::Weight::Medium, stretch: font::Stretch::Normal, style: font::Style::Normal};
-        let artistfont = font::Font{family: font::Family::Name("Roboto"), weight: font::Weight::Normal, stretch: font::Stretch::Normal, style: font::Style::Normal};
+//        let titlefont = font::Font{family: font::Family::Name("Updock"), weight: font::Weight::Medium, stretch: font::Stretch::Normal, style: font::Style::Normal};
+//        let artistfont = font::Font{family: font::Family::Name("Updock"), weight: font::Weight::Normal, stretch: font::Stretch::Normal, style: font::Style::Normal};
+        let detect = button("detect")
+            .on_press(Message::Detect)
+            .style(Self::btntheme);
+        let demo = button("demo")
+            .on_press(Message::Demo)
+            .style(Self::btntheme);
+        let exit = button("exit")
+            .on_press(Message::Exit)
+            .style(Self::btntheme);
+        let menu = button("menu")
+            .on_press(Message::Menu)
+            .style(Self::btntheme);
         
-        let detect = button("detect").on_press(Message::Detect);
-        let exit = button("exit").on_press(Message::Exit);
-
         let trackname = text(self.track_name.clone())
-            .font(titlefont)
-            .size(40);
+            .font(CUSTOM_FONT)
+            .size(40)
+            .center();
         let artistname= text(self.artist_name.clone())
-            .font(artistfont)
-            .size(30);
+//            .font(artistfont)
+            .size(30)
+            .center();
 
         let coverart = iceimage(self.art.clone())
             .width(300);
 
         let interface = column![
-            column![ row![ detect, exit ].padding(5)],
-            column![ row![ column![trackname, artistname].padding(40).width(600), coverart ].align_y(Alignment::Center),]
-                .align_x(Alignment::Center)
-                .width(Length::Fill),
+            row![ column![ row![ detect,exit,demo ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
             ];
         interface
     }
 }
 
 async fn startrecasy(s: Song) -> Song{
+    std::thread::sleep(std::time::Duration::from_secs(WAIT_REC));
     let mut rectime = REC_TIME_S;
     let mut rec = rec_wav(s.clone(), rectime); //record audio
     if rec.is_err(){
@@ -125,7 +205,9 @@ async fn startrecasy(s: Song) -> Song{
     if trackres.is_ok(){
         let mut tracksong = trackres.unwrap();
         if tracksong.track_name == "nosong"{
-            while tracksong.track_name == "nosong"{
+            let mut count = 1;
+            while tracksong.track_name == "nosong" && count <= 3{
+                count += 1;
                 rectime *= 2;
                 rec = rec_wav(s.clone(), rectime); //record audio
                 if rec.is_err(){
