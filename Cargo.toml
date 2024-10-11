@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 serde_json = "1.0"
-iced = { version = "0.13.1", default-features = false, features = ["image", "async-std", "tiny-skia"]}
+iced = { version = "0.13.1", features = ["image", "async-std", "tiny-skia"]}
 hound = "3.5.1"
 cpal = "0.15.3"
 clap = { version = "4.5.18", features = ["derive"] }

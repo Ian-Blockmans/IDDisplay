@@ -18,7 +18,9 @@
                 }
             },
             "args": [],
-            "cwd": "${workspaceFolder}"
-        }
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "ICED_BACKEND": "tiny-skia"
+            }
     ]
 }
