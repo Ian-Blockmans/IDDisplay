@@ -3,6 +3,7 @@ use std::process::Command;
 use std::env;
 use iced::border::{color, right};
 use iced::{color, settings, window, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
+use iced::Element;
 use iced::time::{self, Duration, Instant};
 use serde_json::Value;
 use iced::{widget::{button, column, text, row, Column, Row, container, overlay}, Length, Settings, font, Font, Alignment};
@@ -191,7 +192,7 @@ impl Song {
         }
     }
 
-    fn view(&self) -> Column<Message>{
+    fn view(&self) -> Element<Message>{
 //        let titlefont = font::Font{family: font::Family::Name("Updock"), weight: font::Weight::Medium, stretch: font::Stretch::Normal, style: font::Style::Normal};
 //        let artistfont = font::Font{family: font::Family::Name("Updock"), weight: font::Weight::Normal, stretch: font::Stretch::Normal, style: font::Style::Normal};
         let detect = button("detect")
@@ -203,30 +204,30 @@ impl Song {
         let exit = button("exit")
             .on_press(Message::Exit)
             .style(Self::btntheme);
-        let menu = button("menu")
-            .on_press(Message::Menu)
-            .style(Self::btntheme);
+        //let menu = button("menu")
+        //    .on_press(Message::Menu)
+        //    .style(Self::btntheme);
         let fullscreen = button("Fullscreen")
             .on_press(Message::Fullscreen)
             .style(Self::btntheme);
         
-        let trackname = text(self.track_name.clone())
-            .font(CUSTOM_FONT)
-            .size(TEXT_SIZE)
-            .center();
-        let artistname= text(self.artist_name.clone())
+        //let trackname = text(self.track_name.clone())
+        //    .font(CUSTOM_FONT)
+        //    .size(TEXT_SIZE)
+        //    .center();
+        //let artistname= text(self.artist_name.clone())
 //            .font(artistfont)
-            .size(TEXT_SIZE - 10)
-            .center();
+        //    .size(TEXT_SIZE - 10)
+        //    .center();
 
-        let coverart = iceimage(self.art.clone())
-            .width(300);
+        //let coverart = iceimage(self.art.clone())
+        //    .width(300);
 
-        let interface = column![
-            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
-            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
-            ];
-        interface
+        container(
+            row![ detect,exit,demo,fullscreen ]
+//            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+//            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
+        ).into()
     }
 }
 
