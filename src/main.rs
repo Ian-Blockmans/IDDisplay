@@ -13,7 +13,7 @@ use hound;
 use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample};
-use tempfile::{tempdir, TempDir};
+//use tempfile::{tempdir, TempDir};
 use std::fs::{self, remove_file, remove_dir_all, create_dir, File};
 use std::io::{BufWriter, Read};
 use std::sync::{Arc, Mutex};
@@ -193,8 +193,6 @@ impl Song {
     }
 
     fn view(&self) -> Element<Message>{
-//        let titlefont = font::Font{family: font::Family::Name("Updock"), weight: font::Weight::Medium, stretch: font::Stretch::Normal, style: font::Style::Normal};
-//        let artistfont = font::Font{family: font::Family::Name("Updock"), weight: font::Weight::Normal, stretch: font::Stretch::Normal, style: font::Style::Normal};
         let detect = button("detect")
             .on_press(Message::Detect)
             .style(Self::btntheme);
@@ -204,30 +202,28 @@ impl Song {
         let exit = button("exit")
             .on_press(Message::Exit)
             .style(Self::btntheme);
-        //let menu = button("menu")
-        //    .on_press(Message::Menu)
-        //    .style(Self::btntheme);
+        let menu = button("menu")
+            .on_press(Message::Menu)
+            .style(Self::btntheme);
         let fullscreen = button("Fullscreen")
             .on_press(Message::Fullscreen)
             .style(Self::btntheme);
         
-        //let trackname = text(self.track_name.clone())
-        //    .font(CUSTOM_FONT)
-        //    .size(TEXT_SIZE)
-        //    .center();
-        //let artistname= text(self.artist_name.clone())
-//            .font(artistfont)
-        //    .size(TEXT_SIZE - 10)
-        //    .center();
+        let trackname = text(self.track_name.clone())
+            .size(TEXT_SIZE)
+            .center();
+        let artistname= text(self.artist_name.clone())
+            .size(TEXT_SIZE - 10)
+            .center();
 
-        //let coverart = iceimage(self.art.clone())
-        //    .width(300);
+        let coverart = iceimage(self.art.clone())
+            .width(300);
 
         container(
-            row![ detect,exit,demo,fullscreen ]
-//            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
-//            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
-        ).into()
+            column![
+            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
+        ]).into()
     }
 }
 
