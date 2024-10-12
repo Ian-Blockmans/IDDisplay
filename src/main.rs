@@ -101,7 +101,7 @@ impl Song {
             track_name_prev: ("Previous Track-name0".to_string(), "Previous Track-name1".to_string(), "Previous Track-name2".to_string(), "Previous Track-name3".to_string(), "Previous Track-name4".to_string()).into(),
             prev_index: 0,
             artist_name: "Artistname".to_string(),
-            art: "./?.png".to_string(),
+            art: "./unknown.png".to_string(),
             tmps: TMP_DIR_S.to_string(),
             winid: window::Id::unique(),
             correct: false,
@@ -201,7 +201,7 @@ impl Song {
             Message::Demo => {
                 self.track_name = "Track Name".to_string();
                 self.artist_name = "Artist Name".to_string();
-                self.art = "./?.png".to_string();
+                self.art = "./unknown.png".to_string();
                 Task::none()
             },
             Message::FullscreenExec(id) => {
@@ -288,8 +288,8 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
     let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
     // use the right python envirement for windows or linux
     if OS == "windows" {
-        output = Command::new("./win-py-venv/Scripts/python.exe")
-            .args(["ShazamIO.py", (s.tmps.clone()+"recorded.wav").as_str()])
+        output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe")
+            .args([(s.tmps.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
     } else if OS == "linux" {
