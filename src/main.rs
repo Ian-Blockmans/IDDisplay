@@ -176,9 +176,12 @@ impl Song {
                     self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
                     if matched >= 1{
                         self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
+                        self.track_name_prev = Song::default().track_name_prev; //reset the previous song array
                     }
-
-                    self.track_name_prev[self.prev_index] = song.track_name.clone(); //load current song in previous spngs
+                    
+                    if song.track_name != "nosong".to_string(){
+                        self.track_name_prev[self.prev_index] = song.track_name.clone(); //load current song in previous songs if not "nosong"
+                    }
                     if self.prev_index >= 5 {self.prev_index = 0}
 
                     if song.track_name != "nosong" {
