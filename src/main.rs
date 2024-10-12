@@ -28,8 +28,9 @@ pub mod bytes {
 
 static TMP_DIR_S: &str = "./tmp/"; 
 static REC_TIME_S: u64 = 3;
-static EVERY_S: u64 = 3600;
-static WAIT_REC: u64 = 5;
+static EVERY_S: u64 = 3600; //run tick every amount of seconds
+static WAIT_WHEN_CORRECT: u64 = 60;
+static WAIT_REC: u64 = 5; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
 static TEXT_SIZE: u16 = 60;
@@ -79,20 +80,32 @@ enum Message {
 #[derive(Debug, Clone)]
 struct Song{
     track_name: String,
+    track_name_prev: [String; 5],
+    prev_index: usize,
     artist_name: String,
     art: String,
     tmps: String,
     winid: window::Id,
+    correct: bool,
+    error: String,
+}
+
+impl Default for Song {
+    fn default() -> Self {Song::default()}
 }
 
 impl Song {
     fn default() -> Song {
         Song{ 
-            track_name: "Track-name".to_string(),
+            track_name: "nosong".to_string(),
+            track_name_prev: ("Previous Track-name0".to_string(), "Previous Track-name1".to_string(), "Previous Track-name2".to_string(), "Previous Track-name3".to_string(), "Previous Track-name4".to_string()).into(),
+            prev_index: 0,
             artist_name: "Artistname".to_string(),
             art: "./?.png".to_string(),
             tmps: TMP_DIR_S.to_string(),
             winid: window::Id::unique(),
+            correct: false,
+            error: "Ok".to_string(),
         }
     }
     fn startup() -> (Song, Task<Message>) {
@@ -154,17 +167,32 @@ impl Song {
                 //Task::none()
             },
             Message::DisplaySong(song) => {
-                if song.track_name != "nosong" {
-                    self.track_name = song.track_name;
-                    self.artist_name = song.artist_name;
-                    if self.track_name == "No song detected".to_string(){
-                        self.art = "".to_string();
-                    } else {
-                        self.art = song.art.clone();
+                if song.error != "Ok".to_string() {
+                    self.track_name = "ShazamIO failed to execute".to_string();
+                    Task::none()
+                } else {
+                    let mut matched = 0; //amount of time current song is found in previous
+                    self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
+                    if matched >= 1{
+                        self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
                     }
-                    self.view();
+
+                    self.track_name_prev[self.prev_index] = song.track_name.clone(); //load current song in previous spngs
+                    if self.prev_index >= 5 {self.prev_index = 0}
+
+                    if song.track_name != "nosong" {
+                        self.track_name = song.track_name;
+                        self.artist_name = song.artist_name;
+                        if self.track_name == "No song detected".to_string(){
+                            self.art = "".to_string();
+                        } else {
+                            self.art = song.art.clone();
+                        }
+                        self.view();
+                    }
+                    iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
                 }
-                iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
+                
                 //Task::none()
             },
             Message::Menu => {
@@ -213,7 +241,7 @@ impl Song {
             .size(TEXT_SIZE)
             .center();
         let artistname= text(self.artist_name.clone())
-            .size(TEXT_SIZE - 10)
+            .size(TEXT_SIZE - 15)
             .center();
 
         let coverart = iceimage(self.art.clone())
@@ -228,37 +256,32 @@ impl Song {
 }
 
 async fn startrecasy(s: Song) -> Song{
-    std::thread::sleep(std::time::Duration::from_secs(WAIT_REC));
-    let mut rectime = REC_TIME_S;
-    let mut rec = rec_wav(s.clone(), rectime); //record audio
-    if rec.is_err(){
-        panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
-    }
-    let mut trackres = shazamrec(s.clone()); //try to recognize song
-    if trackres.is_ok(){
-        let mut tracksong = trackres.unwrap();
-        if tracksong.track_name == "nosong"{
-            let mut count = 1;
-            while tracksong.track_name == "nosong" && count <= 3{
-                count += 1;
-                rectime *= 2;
-                rec = rec_wav(s.clone(), rectime); //record audio
-                if rec.is_err(){
-                    panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
-                }
-                trackres = shazamrec(s.clone()); //try to recognize song
-                tracksong = trackres.unwrap()
-            }
-            tracksong
-        } else {
-            tracksong //return Song when shazamio returned a song first try
-        }
+    if s.correct == true {
+        std::thread::sleep(std::time::Duration::from_secs(WAIT_WHEN_CORRECT)); //wait 60 if the correct song is found with reasable confidence
     } else {
-        println!("{:?}",trackres); //write error to songname if shazamio failed to execute
-        let mut songerror = Song::default();
-        songerror.artist_name = "error".to_string();
-        songerror
+        std::thread::sleep(std::time::Duration::from_secs(WAIT_REC)); //wait to slow down recognition, i don't want to spam shazam, might not be nesesairy 
     }
+    let mut rectime = REC_TIME_S;
+    let mut rec: std::result::Result<(), anyhow::Error>;
+    let mut tracksong: Result<Song, anyhow::Error> = Ok(Song::default());
+    let mut count = 0;
+
+    while tracksong.as_ref().unwrap().track_name == "nosong" && count <= 3 && tracksong.is_ok(){
+        count += 1;
+        rectime *= 2;
+        rec = rec_wav(s.clone(), rectime); //record audio
+        if rec.is_err(){
+            panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
+        }
+        tracksong = shazamrec(s.clone()); //try to recognize song
+        if tracksong.is_err() {
+            let mut ret_error = Song::default();
+            ret_error.error = tracksong.err().unwrap().to_string();
+            return ret_error
+        }
+    }
+    tracksong.unwrap()
+
 }
 
 fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
