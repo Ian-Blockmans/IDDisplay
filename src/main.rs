@@ -319,10 +319,11 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
             nosong.track_name = "nosong".to_string();
             Ok(nosong)
         } else { // populate Song whit corect values
+            let mut imgpath = "./unknown.png".to_string();
             if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
-                let imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
+                imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
             } else {
-                let imgpath = "./unknown.png".to_string();
+                imgpath = "./unknown.png".to_string();
             }
             
             let mut song = Song::default();
