@@ -29,7 +29,7 @@ pub mod bytes {
 static TMP_DIR_S: &str = "./tmp/"; 
 static REC_TIME_S: u64 = 3;
 static EVERY_S: u64 = 3600; //run tick every amount of seconds
-static WAIT_WHEN_CORRECT: u64 = 60;
+static WAIT_WHEN_CORRECT: u64 = 5;
 static WAIT_REC: u64 = 5; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
@@ -178,7 +178,7 @@ impl Song {
                         self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
                         self.track_name_prev = Song::default().track_name_prev; //reset the previous song array
                     }
-                    
+
                     if song.track_name != "nosong".to_string(){
                         self.track_name_prev[self.prev_index] = song.track_name.clone(); //load current song in previous songs if not "nosong"
                     }
@@ -319,7 +319,11 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
             nosong.track_name = "nosong".to_string();
             Ok(nosong)
         } else { // populate Song whit corect values
-            let imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
+            if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
+                let imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
+            } else {
+                let imgpath = "./unknown.png".to_string();
+            }
             
             let mut song = Song::default();
             song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
