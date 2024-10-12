@@ -171,6 +171,7 @@ impl Song {
                     self.track_name = "ShazamIO failed to execute".to_string();
                     Task::none()
                 } else {
+                    self.correct = false;
                     let mut matched = 0; //amount of time current song is found in previous
                     self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
                     if matched >= 1{
