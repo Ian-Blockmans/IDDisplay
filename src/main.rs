@@ -1,13 +1,19 @@
-use core::{arch, str};
+use core::{arch, error, str};
+use std::borrow::Borrow;
 use std::process::Command;
-use std::env;
+use std::{clone, env};
+use clap::builder::Str;
+use futures::{task, TryFutureExt};
 use iced::border::{color, right};
-use iced::{color, settings, window, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
+use iced::widget::canvas::path::lyon_path::geom::euclid::default;
+use iced::{color, run, settings, window, Background, Border, Color, Padding, Shadow, Size, Subscription, Task, Theme};
 use iced::Element;
 use iced::time::{self, Duration, Instant};
+use rspotify::model::{AdditionalType, PlayableItem};
+use rspotify::prelude::{BaseClient, OAuthClient};
 use serde_json::Value;
-use iced::{widget::{button, column, text, row, Column, Row, container, overlay}, Length, Settings, font, Font, Alignment};
-use iced::widget::{Button, Image as IceImage};
+use iced::{widget::{button, column, text, row, Column, Row, container, overlay, qr_code}, Length, Settings, font, Font, Alignment};
+use iced::widget::{Button, Image as IceImage, QRCode};
 use iced::widget::image as iceimage;
 use hound;
 use clap::Parser;
@@ -15,25 +21,37 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample};
 //use tempfile::{tempdir, TempDir};
 use std::fs::{self, remove_file, remove_dir_all, create_dir, File};
-use std::io::{BufWriter, Read};
+use std::io::{BufWriter, Read, Write};
 use std::sync::{Arc, Mutex};
-use anyhow::Result;
-use std::thread::{self, Thread};
-
+use anyhow::{Error, Result};
+use std::collections::HashMap;
+use warp::{
+    http::Response,
+    Filter,
+};
+use rspotify::{self, scopes, AuthCodeSpotify, Config, Credentials, OAuth, Token};
+use tokio;
+use std::net::{IpAddr, Ipv4Addr, Shutdown, SocketAddr};
 
 pub static CUSTOM_FONT: Font = Font::with_name("Less Perfect DOS VGA");
 pub mod bytes {
     pub static CUSTOM_FONT: &[u8] = include_bytes!("../LessPerfectDOSVGA.ttf");
 }
 
+//spotify
+//const CACHE_PATH: &str = "./tmp/";
+const CLIENT_ID: &str = "72707970d9254ea1baf38fff45afed06";
+const CLIENT_SECRET: &str = "73715f9ba05b40e6890e1f7aab9d20e7";
+
 static TMP_DIR_S: &str = "./tmp/"; 
 static REC_TIME_S: u64 = 3;
 static EVERY_S: u64 = 3600; //run tick every amount of seconds
 static WAIT_WHEN_CORRECT: u64 = 5;
-static WAIT_REC: u64 = 5; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
+static WAIT_REC: u64 = 1; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
 static TEXT_SIZE: u16 = 60;
+
 
 fn main() -> Result<(), anyhow::Error> {
     println!("OS: {}", OS);
@@ -53,40 +71,21 @@ fn main() -> Result<(), anyhow::Error> {
         antialiasing: false,
     };
     //iced::application("ShazamDisplay", Song::update, Song::view).subscription(Song::songsubscription).run()?; // run songsubscription EVERY_S as a tick
-    iced::application("ShazamDisplay", Song::update, Song::view)
+    iced::application("ShazamDisplay", App::update, App::view)
         .settings(set)
-        .theme(Song::termtheme)
+        .theme(App::termtheme)
         .window_size(Size::new(800.0, 480.0))
-        .run_with(Song::startup)?;
+        .run_with(App::startup)?;
     //iced::run("start", Song::update, Song::view)?;
     remove_dir_all(TMP_DIR_S)?;
     Ok(())
 }
 
-#[derive(Clone, Debug)]
-enum Message {
-    Detect,
-    Exit,
-    DisplaySong(Song),
-    Menu,
-    Demo,
-    GetMainWinId,
-    StoreMainWinId(window::Id),
-    FullscreenExec(window::Id),
-    Fullscreen,
-    Tick,
-}
-
 #[derive(Debug, Clone)]
 struct Song{
     track_name: String,
-    track_name_prev: [String; 5],
-    prev_index: usize,
     artist_name: String,
     art: String,
-    tmps: String,
-    winid: window::Id,
-    correct: bool,
     error: String,
 }
 
@@ -98,18 +97,70 @@ impl Song {
     fn default() -> Song {
         Song{ 
             track_name: "nosong".to_string(),
+            artist_name: "Artistname".to_string(),
+            art: "./unknown.png".to_string(),
+            error: "Ok".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum Message {
+    Detect,
+    Exit,
+    DisplaySong(Song),
+    Menu,
+    SpInit,
+    SpSaveAuth(AuthCodeSpotify),
+    SpShowQr(String),
+    SpAuthOk,
+    SpAuthError(Result<Token, String>),
+    SpShowCurrent,
+    Demo,
+    GetMainWinId,
+    StoreMainWinId(window::Id),
+    FullscreenExec(window::Id),
+    Fullscreen,
+    Tick,
+    None(()),
+}
+
+#[derive(Debug)]
+struct App{
+    track_name: String,
+    track_name_prev: [String; 5],
+    prev_index: usize,
+    artist_name: String,
+    art: String,
+    tmp_dir: String,
+    winid: window::Id,
+    correct: bool,
+    sp_auth: rspotify::AuthCodeSpotify,
+    sp_auth_url_data: qr_code::Data,
+}
+
+impl Default for App {
+    fn default() -> Self { App::default()}
+}
+
+impl App {
+    fn default() -> App {
+        App{ 
+            track_name: "nosong".to_string(),
             track_name_prev: ("Previous Track-name0".to_string(), "Previous Track-name1".to_string(), "Previous Track-name2".to_string(), "Previous Track-name3".to_string(), "Previous Track-name4".to_string()).into(),
             prev_index: 0,
             artist_name: "Artistname".to_string(),
             art: "./unknown.png".to_string(),
-            tmps: TMP_DIR_S.to_string(),
+            tmp_dir: TMP_DIR_S.to_string(),
             winid: window::Id::unique(),
             correct: false,
-            error: "Ok".to_string(),
+            sp_auth: AuthCodeSpotify::default(),
+            sp_auth_url_data: qr_code::Data::new( "http://localhost/").unwrap(),
         }
     }
-    fn startup() -> (Song, Task<Message>) {
-        (Song::default(), Task::done(Message::GetMainWinId))
+
+    fn startup() -> (App, Task<Message>) {
+        (App::default(), Task::none())
     }
     fn termtheme(&self) -> Theme {
         let terminal: iced::theme::Palette = iced::theme::Palette{
@@ -152,19 +203,16 @@ impl Song {
     }
     
     fn update(&mut self, message: Message) -> Task<Message>{
-        self.tmps = TMP_DIR_S.to_string();
+        self.tmp_dir = TMP_DIR_S.to_string();
         match message {
             Message::Tick => {
-                iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
+                iced::Task::perform(startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
             }
             Message::Detect => {
-                iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
+                iced::Task::perform(startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
             }
             Message::Exit => {
                 iced::exit::<Message>()
-                //let id = iced::window::Id::unique();
-                //let _task: Task<()> = iced::window::close(id);
-                //Task::none()
             },
             Message::DisplaySong(song) => {
                 if song.error != "Ok".to_string() {
@@ -176,7 +224,7 @@ impl Song {
                     self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
                     if matched >= 1{
                         self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
-                        self.track_name_prev = Song::default().track_name_prev; //reset the previous song array
+                        self.track_name_prev = App::default().track_name_prev; //reset the previous song array
                     }
 
                     if song.track_name != "nosong".to_string(){
@@ -194,13 +242,13 @@ impl Song {
                         }
                         self.view();
                     }
-                    iced::Task::perform(startrecasy(self.clone()), Message::DisplaySong)
+                    iced::Task::perform(startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
                 }
                 
                 //Task::none()
             },
             Message::Menu => {
-                Task::none()
+                Task::done(Message::SpInit)
             },
             Message::Demo => {
                 self.track_name = "Track Name".to_string();
@@ -212,7 +260,7 @@ impl Song {
                 iced::window::change_mode(id, window::Mode::Fullscreen) //change window id to fullschreen
             },
             Message::Fullscreen => {
-                Task::done(Message::FullscreenExec(self.winid))
+                Task::done(Message::FullscreenExec(self.winid.clone()))
             },
             Message::GetMainWinId => {
                 window::get_oldest().map(|id| Message::StoreMainWinId(id.unwrap())) //get oldest id and pass to FullscreenExec
@@ -221,6 +269,38 @@ impl Song {
                 self.winid = id;
                 Task::none()
             }
+            Message::None(n) => {
+                Task::none()
+            },
+            Message::SpShowQr(url) => {
+                self.sp_auth_url_data = qr_code::Data::new(url).unwrap();
+                tokio::spawn(spotify_callback(self.sp_auth.clone()));
+                Task::done(Message::SpAuthOk)
+            },
+            Message::SpAuthOk => {
+                Task::perform(spotify_wait_for_token(self.sp_auth.clone()),Message::SpAuthError)
+            },
+            Message::SpAuthError(res) => {
+                match res {
+                    Ok(token) => {
+                        Task::perform(spotify_get_current(token),Message::DisplaySong)
+                    }
+                    Err(error) =>{
+                        self.track_name = error;
+                        Task::none()
+                    }
+                }
+            },
+            Message::SpInit => {
+                Task::perform(spotify_init(), Message::SpSaveAuth)
+            },
+            Message::SpSaveAuth(auth) => {
+                self.sp_auth = auth;
+                Task::perform(spotify_qr(self.sp_auth.clone()), Message::SpShowQr)
+            },
+            Message::SpShowCurrent => {
+                Task::none()
+            },
         }
     }
 
@@ -248,19 +328,122 @@ impl Song {
             .size(TEXT_SIZE - 15)
             .center();
 
+        
         let coverart = iceimage(self.art.clone())
             .width(300);
+        
+        let spotify_qr_code = qr_code(&self.sp_auth_url_data);
 
         container(
             column![
             row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
-            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),]
+            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),],
+            row![ spotify_qr_code ],
         ]).into()
     }
+    
 }
 
-async fn startrecasy(s: Song) -> Song{
-    if s.correct == true {
+async fn spotify_wait_for_token(auth: AuthCodeSpotify) -> Result<Token, String>{
+    let tmp_path = TMP_DIR_S;
+    //let code = fs::read_to_string(tmp_path.to_string() + "code.txt");
+    for i in 0..60 {
+        let code = fs::read_to_string(tmp_path.to_string() + "code.txt");
+        match &code {
+            Ok(code_s) => {
+                //auth.request_token(code_s).await;
+                match auth.request_token(code_s).await {
+                    Ok(o) => {
+                        match rspotify::Token::from_cache(TMP_DIR_S.to_string() + "spotify_token_cache.json") {
+                            Ok(token) => {
+                                return Ok(token);
+                            }
+                            Err(_err) => {
+                                return Err("bad token".to_string());
+                            }
+                        }
+                    }
+                    Err(e) => {
+
+                    }
+                }
+            }
+            Err(_e) => {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+            }
+        }
+    }
+    Err("timeout".to_string())
+}
+
+async fn spotify_get_current(token: Token) -> Song{
+    let mut s = Song::default();
+    let spotify = AuthCodeSpotify::from_token(token);
+    let current = spotify.current_playing(None,Some(vec![&AdditionalType::Track])).await.unwrap();
+    if current != None{
+        match current.unwrap().item.unwrap() {
+            PlayableItem::Track( t) => {
+                s.track_name = t.name
+            }
+            PlayableItem::Episode(e) => {
+                
+            }
+        }
+    }
+    s
+}
+
+async fn spotify_callback(sp_auth: AuthCodeSpotify) -> String {
+    let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 40)), 80);
+    // GET /hello/warp => 200 OK with body "Hello, warp!"
+    let route = warp::path!("callback")
+        .and(warp::query::<HashMap<String, String>>())
+        .map(move |map: HashMap<String, String>| {
+            let mut response: Vec<String> = Vec::new();
+            for (key, value) in map.into_iter() {
+                if key == "code"{
+                    let tmp_dir = TMP_DIR_S;
+                    let file = File::create_new(tmp_dir.to_string() + "code.txt");
+                    file.unwrap().write(value.as_bytes());
+                }
+                response.push(format!("{}={}", key, value))
+            }
+            Response::builder().body(response.join(";"))
+    });
+    
+    warp::serve(route)
+        .run(socket).await;
+    "Ok".to_string()
+}
+
+async fn spotify_init() -> AuthCodeSpotify {
+    let config = Config {
+        token_cached: true,
+        cache_path: (TMP_DIR_S.to_string() + "spotify_token_cache.json").into(),
+        ..Default::default()
+    };
+    let oauth = OAuth {
+        scopes: scopes!(
+            "user-read-currently-playing",
+            "playlist-modify-private",
+            "playlist-modify-public"
+        ),
+        redirect_uri: "http://desktop.local/callback".to_owned(),
+        ..Default::default()
+    };
+    let creds = Credentials::new(CLIENT_ID, CLIENT_SECRET);
+    AuthCodeSpotify::with_config(creds, oauth, config)
+}
+
+async fn spotify_qr(auth: AuthCodeSpotify) -> String{
+    let qr = rspotify::AuthCodeSpotify::get_authorize_url(&auth, false).unwrap();
+    //qr_code::Data::new(rspotify::AuthCodeSpotify::get_authorize_url(&self.sp_auth, false).unwrap()).unwrap(); //create login url
+    qr
+}
+
+
+async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
+    if correct == true {
         std::thread::sleep(std::time::Duration::from_secs(WAIT_WHEN_CORRECT)); //wait 60 if the correct song is found with reasable confidence
     } else {
         std::thread::sleep(std::time::Duration::from_secs(WAIT_REC)); //wait to slow down recognition, i don't want to spam shazam, might not be nesesairy 
@@ -273,11 +456,11 @@ async fn startrecasy(s: Song) -> Song{
     while tracksong.as_ref().unwrap().track_name == "nosong" && count <= 3 && tracksong.is_ok(){
         count += 1;
         rectime *= 2;
-        rec = rec_wav(s.clone(), rectime); //record audio
+        rec = rec_wav(tmp_dir.clone(), rectime); //record audio
         if rec.is_err(){
             panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
         }
-        tracksong = shazamrec(s.clone()); //try to recognize song
+        tracksong = shazamrec(tmp_dir.clone()).await; //try to recognize song
         if tracksong.is_err() {
             let mut ret_error = Song::default();
             ret_error.error = tracksong.err().unwrap().to_string();
@@ -288,23 +471,23 @@ async fn startrecasy(s: Song) -> Song{
 
 }
 
-fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
+async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
     let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
     // use the right python envirement for windows or linux
     if OS == "windows" {
         output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe")
-            .args([(s.tmps.clone()+"recorded.wav").as_str()])
+            .args([(tmp_dir.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
     } else if OS == "linux" {
         if ARCHITECTURE == "aarch64" {
             output = Command::new("./lx-dist-aarch64/ShazamIO/ShazamIO")
-            .args([(s.tmps.clone()+"recorded.wav").as_str()])
+            .args([(tmp_dir.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
         } else if ARCHITECTURE == "x86_64" {
             output = Command::new("./lx-dist-x86_64/ShazamIO/ShazamIO")
-            .args([(s.tmps.clone()+"recorded.wav").as_str()])
+            .args([(tmp_dir.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
         }
@@ -321,7 +504,7 @@ fn shazamrec(s: Song) -> Result<Song, anyhow::Error> {
         } else { // populate Song whit corect values
             let mut imgpath = "./unknown.png".to_string();
             if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
-                imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), s.tmps.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" )?;
+                imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), tmp_dir.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" ).await.unwrap();
             } else {
                 imgpath = "./unknown.png".to_string();
             }
@@ -363,7 +546,7 @@ struct Opt {
     jack: bool,
 }
 
-fn rec_wav(s: Song, time_s: u64) -> Result<(), anyhow::Error>{
+fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let opt = Opt::parse();
 
     // Conditionally compile with jack if the feature is specified.
@@ -417,7 +600,7 @@ fn rec_wav(s: Song, time_s: u64) -> Result<(), anyhow::Error>{
     println!("Default input config: {:?}", config);
 
     // The WAV file we're recording to.
-    let fullpath = (s.tmps + "recorded.wav").as_str().to_owned();
+    let fullpath = (tmp_dir + "recorded.wav").as_str().to_owned();
     let spath: &str = fullpath.as_str();
     let spec = wav_spec_from_config(&config);
     let writer = hound::WavWriter::create(spath, spec)?;
@@ -512,9 +695,9 @@ where
 }
 
 //needs to change name every time
-fn get_image<'a>(link: &'a str,store: String) -> Result<String, anyhow::Error> {
+async fn get_image<'a>(link: &'a str,store: String) -> Result<String, anyhow::Error> {
     let target = link;
-    let response = reqwest::blocking::get(target)?.bytes()?;
+    let response = reqwest::get(target).await.unwrap().bytes().await.unwrap();
     let image = image::load_from_memory(&response)?;
     image.save(&store)?;
    Ok(store.to_string())
