@@ -285,13 +285,13 @@ impl App {
         let coverart = iceimage(self.art.clone())
             .width(300);
         
-        let spotify_qr_code = qr_code(&self.sp_auth_url_data);
+        //let spotify_qr_code = qr_code(&self.sp_auth_url_data);
 
         container(
             column![
             row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),],
-            row![ spotify_qr_code ],
+            //row![ spotify_qr_code ],
         ]).into()
     }
     
