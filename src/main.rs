@@ -26,7 +26,7 @@ pub static TMP_DIR_S: &str = "./tmp/";
 static _EVERY_S: u64 = 3600; //run tick every amount of seconds
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
-static TEXT_SIZE: u16 = 60;
+static TEXT_SIZE: u16 = 50;
 
 
 fn main() -> Result<(), anyhow::Error> {
