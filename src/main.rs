@@ -1,21 +1,17 @@
 use core::str;
 use std::env;
-use iced::overlay::menu::Catalog;
-use iced::{settings, window, Background, Border, Color, Renderer, Shadow, Size, Task, Theme};
+use iced::{settings, window, Background, Border, Color, Shadow, Size, Task, Theme};
 //use iced::Subscription;
 use iced::Element;
 //use iced::time::{self, Duration};
-use iced::{widget::{self, button, column, text, row, container, qr_code, stack, opaque,mouse_area,center, Button}, Length, Font, Alignment};
+use iced::{widget::{ button, column, text, row, container,  Button}, Length, Font, Alignment};
 use iced::widget::image as iceimage;
 //use image::imageops::overlay;
 use std::fs::{self, remove_dir_all, create_dir};
 use anyhow::Result;
-use rspotify::{self, AuthCodeSpotify, Token};
-use tokio;
 
 mod song;
 use song::Song;
-use song::spotify;
 use song::rcognize;
 
 
@@ -62,7 +58,6 @@ fn main() -> Result<(), anyhow::Error> {
         .theme(App::termtheme)
         .window_size(Size::new(800.0, 480.0))
         .run_with(App::startup)?;
-    //iced::run("start", Song::update, Song::view)?;
     remove_dir_all(TMP_DIR_S)?;
     Ok(())
 }
@@ -72,22 +67,11 @@ enum Message {
     Detect,
     Exit,
     DisplaySong(Song),
-    Menu(String),
-    SpInit,
-    SpSaveAuth(AuthCodeSpotify),
-    SpShowQr(String),
-    SpAuthOk,
-    SpAuthError(Result<Token, String>),
-    SpShowCurrent,
     Demo,
     GetMainWinId,
     StoreMainWinId(window::Id),
     FullscreenExec(window::Id),
     Fullscreen,
-    ShowMenu,
-    HideMenu,
-//    Tick,
-//    None(()),
 }
 
 #[derive(Debug)]
@@ -100,9 +84,6 @@ struct App{
     tmp_dir: String,
     winid: window::Id,
     correct: bool,
-    sp_auth: rspotify::AuthCodeSpotify,
-    sp_auth_url_data: qr_code::Data,
-    show_menu: bool,
 }
 
 impl Default for App {
@@ -120,9 +101,6 @@ impl App {
             tmp_dir: TMP_DIR_S.to_string(),
             winid: window::Id::unique(),
             correct: false,
-            sp_auth: AuthCodeSpotify::default(),
-            sp_auth_url_data: qr_code::Data::new( "http://localhost/").unwrap(),
-            show_menu: false,
         }
     }
 
@@ -179,13 +157,6 @@ impl App {
                 
                 //Task::none()
             },
-            Message::Menu(item) => {
-                if item == "spotify" {
-                    Task::done(Message::SpInit)
-                } else {
-                    Task::none()
-                }
-            },
             Message::Demo => {
                 self.track_name = "Track Name".to_string();
                 self.artist_name = "Artist Name".to_string();
@@ -204,46 +175,6 @@ impl App {
             Message::StoreMainWinId(id) => {
                 self.winid = id;
                 Task::none()
-            }
-//            Message::None(n) => {
-//                Task::none()
-//            },
-            Message::SpShowQr(url) => {
-                self.sp_auth_url_data = qr_code::Data::new(url).unwrap();
-                tokio::spawn(spotify::spotify_callback(self.sp_auth.clone()));
-                Task::done(Message::SpAuthOk)
-            },
-            Message::SpAuthOk => {
-                Task::perform(spotify::spotify_wait_for_token(self.sp_auth.clone()),Message::SpAuthError)
-            },
-            Message::SpAuthError(res) => {
-                match res {
-                    Ok(token) => {
-                        Task::perform(spotify::spotify_get_current(token),Message::DisplaySong)
-                    }
-                    Err(error) =>{
-                        self.track_name = error;
-                        Task::none()
-                    }
-                }
-            },
-            Message::SpInit => {
-                Task::perform(spotify::spotify_init(), Message::SpSaveAuth)
-            },
-            Message::SpSaveAuth(auth) => {
-                self.sp_auth = auth;
-                Task::perform(spotify::spotify_qr(self.sp_auth.clone()), Message::SpShowQr)
-            },
-            Message::SpShowCurrent => {
-                Task::none()
-            },
-            Message::HideMenu => {
-                self.show_menu = false;
-                Task::none()
-            }
-            Message::ShowMenu => {
-                self.show_menu = true;
-                widget::focus_next()
             }
         }
     }
@@ -305,9 +236,6 @@ impl App {
         let exit: Button<'_, Message> = button("exit")
             .on_press(Message::Exit)
             .style(Self::btntheme);
-        let menu:Button<'_, Message> = button("menu")
-            .on_press(Message::ShowMenu)
-            .style(Self::btntheme);
         let fullscreen = button("Fullscreen")
             .on_press(Message::Fullscreen)
             .style(Self::btntheme);
@@ -322,65 +250,16 @@ impl App {
         let coverart = iceimage(self.art.clone())
             .width(300);
 
-        let spotify = Self::padded_button("spotify", 40, 20)
-            .on_press(Message::Demo)
-            .style(Self::btntheme);
-        let settings = Self::padded_button("settings", 40, 20)
-            .on_press(Message::Demo)
-            .style(Self::btntheme);
         
 
         //let spotify_qr_code = qr_code(&self.sp_auth_url_data);
-        let main_page = container(
+        container(
             column![
-            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),],
             //row![ spotify_qr_code ],
-        ]);
-
-        if self.show_menu {
-            let menu = container(
-        column![ spotify,
-                          settings,
-                    ]);
-            sidebar(main_page, menu, Message::HideMenu)
-        } else {
-            main_page.into()
-        }
+        ]).into()
     }
     
-}
-
-fn sidebar<'a, Message>(
-    base: impl Into<Element<'a, Message>>,
-    content: impl Into<Element<'a, Message>>,
-    on_blur: Message,
-) -> Element<'a, Message>
-where
-    Message: Clone + 'a,
-{
-    stack![
-        base.into(),
-        opaque(
-            mouse_area(  
-                container( container( column![ opaque(content) ].height(Length::Fill) ).style(App::menu_style) )
-                .align_right(Length::Fill)
-                .height(Length::Fill)
-                .style(|_theme| {
-                container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.8,
-                            ..Color::BLACK
-                        }
-                        .into(),
-                    ),
-                    ..container::Style::default()
-                }
-            }))
-            .on_press(on_blur)
-        )
-    ].height(Length::Fill)
-    .into()
 }
 

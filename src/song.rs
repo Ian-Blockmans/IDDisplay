@@ -1,5 +1,4 @@
 
-pub mod spotify;
 pub mod rcognize;
 
 #[derive(Debug, Clone)]

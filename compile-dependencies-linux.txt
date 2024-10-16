@@ -1,6 +1,2 @@
 sudo apt install libssl-dev libasound2-dev
 pip install shazamio
-
-            "env": {
-                "ICED_BACKEND": "tiny-skia"
-            },

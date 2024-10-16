@@ -12,7 +12,8 @@ With minor tweaks i am sure any platfornm supported by rust and python can work.
 
 ## usage
 
-press the detedct button and wait until a song is recognized. It will try detect the song until you exit.
+press the detedct button and wait until a song is recognized. It will try detect the song until you exit. 
+When you press exit it might take a minute to close because ti wants to end the loop.(working on a fix)
 
 ## quirks and features
 

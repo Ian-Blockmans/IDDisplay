@@ -6,3 +6,5 @@
 /build
 /py-venv
 /spotify_cache
+/song.wav
+/.vscode
