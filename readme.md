@@ -6,13 +6,13 @@ This is a gui for song recognition using [ShazamIO](https://github.com/shazamio/
 
 ## Install
 
-curently you need to compile the code yourself. I already created executables for the ShazamIO python code. The default recording device will be used to lisen for music.
+curently you need to compile the code yourself (I recomend using the minimal branch for now). I already created executables for the ShazamIO python code. The default recording device will be used to lisen for music.
 The curently suported platforms are x86_64 windows and linux and aarch64 linux. My setup is a raspberry pi 4 with a touchscreen and a microphone.
 With minor tweaks i am sure any platfornm supported by rust and python can work.
 
 ## usage
 
-press the detedct button and wait until a song is recognized. It will try detect the song until you exit.
+press the detedct button and wait until a song is recognized. It will try detect the song until you exit. When you press exit it might take a minute to close because ti wants to end the loop.(working on a fix)
 
 ## quirks and features
 
