@@ -1,4 +1,5 @@
 # IDDisplay
+![screenshot](Screenshot.png)
 ## about
 
 This is a gui for song recognition using [ShazamIO](https://github.com/shazamio/ShazamIO) written in rust. The gui library i used is [iced](https://github.com/iced-rs/iced/tree/master).
