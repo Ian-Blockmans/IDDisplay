@@ -1,11 +1,13 @@
 use core::str;
 use std::env;
-use iced::{settings, window, Background, Border, Color, Shadow, Size, Task, Theme};
+use iced::overlay::menu::Catalog;
+use iced::{settings, window, Background, Border, Color, Renderer, Shadow, Size, Task, Theme};
 //use iced::Subscription;
 use iced::Element;
 //use iced::time::{self, Duration};
-use iced::{widget::{button, column, text, row, container, qr_code}, Length, Font, Alignment};
+use iced::{widget::{self, button, column, text, row, container, qr_code, stack, opaque,mouse_area,center, Button}, Length, Font, Alignment};
 use iced::widget::image as iceimage;
+//use image::imageops::overlay;
 use std::fs::{self, remove_dir_all, create_dir};
 use anyhow::Result;
 use rspotify::{self, AuthCodeSpotify, Token};
@@ -27,6 +29,14 @@ static _EVERY_S: u64 = 3600; //run tick every amount of seconds
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
 static TEXT_SIZE: u16 = 50;
+static TEXT_COLOR: Color = Color{r: 0.12, g: 0.84, b:0.38, a: 1.0};
+static SP_GREEN: Color = Color{r: 0.12, g: 0.84, b:0.38, a: 1.0};
+static GRAY_HIGHLIGHT: Color = Color{r: 0.18, g: 0.18, b:0.18, a: 1.0};
+static DARK_GRAY: Color = Color{r: 0.08, g: 0.08, b:0.08, a: 1.0};
+static BLACK: Color = Color{r: 0.0, g: 0.0, b:0.0, a: 1.0};
+static DARK_BLUE: Color = Color{r: 0.12, g: 0.16, b:0.23, a: 1.0};
+static BACKGROUND_DARK_BLUE: Background = Background::Color(DARK_BLUE);
+static BACKGROUND_GRAY: Background = Background::Color(GRAY_HIGHLIGHT);
 
 
 fn main() -> Result<(), anyhow::Error> {
@@ -62,7 +72,7 @@ enum Message {
     Detect,
     Exit,
     DisplaySong(Song),
-    Menu,
+    Menu(String),
     SpInit,
     SpSaveAuth(AuthCodeSpotify),
     SpShowQr(String),
@@ -74,6 +84,8 @@ enum Message {
     StoreMainWinId(window::Id),
     FullscreenExec(window::Id),
     Fullscreen,
+    ShowMenu,
+    HideMenu,
 //    Tick,
 //    None(()),
 }
@@ -90,6 +102,7 @@ struct App{
     correct: bool,
     sp_auth: rspotify::AuthCodeSpotify,
     sp_auth_url_data: qr_code::Data,
+    show_menu: bool,
 }
 
 impl Default for App {
@@ -109,46 +122,12 @@ impl App {
             correct: false,
             sp_auth: AuthCodeSpotify::default(),
             sp_auth_url_data: qr_code::Data::new( "http://localhost/").unwrap(),
+            show_menu: false,
         }
     }
 
     fn startup() -> (App, Task<Message>) {
         (App::default(), Task::done(Message::GetMainWinId))
-    }
-    fn termtheme(&self) -> Theme {
-        let terminal: iced::theme::Palette = iced::theme::Palette{
-            background: Color{r: 0.0, g: 0.0, b:0.0, a: 1.0},
-            text: Color{r: 0.12, g: 0.84, b:0.38, a: 1.0},
-            primary: Color{r: 0.1, g: 0.1, b:0.1, a: 1.0},
-            success: Color{r: 0.0, g: 0.0, b: 0.0, a: 1.0},
-            danger: Color{r: 0.0, g: 0.0, b: 0.0, a: 1.0},
-        };
-        Theme::custom("Terminal".to_string(), terminal)
-    }
-    
-    fn btntheme(theme: &Theme, status: button::Status) -> button::Style {
-        let textcolor = theme.palette().text;
-        match status {
-            button::Status::Active => {
-                let style = button::Style {
-                    background: Some(Background::Color(Color{r: 0.0, g: 0.0, b:0.0, a: 1.0})),
-                    text_color: textcolor,
-                    border: Border::default(),
-                    shadow: Shadow::default(),
-                };
-                style
-            }
-            _ => {
-                let style = button::Style {
-                    background: Some(Background::Color(Color{r: 0.1, g: 0.1, b:0.1, a: 1.0})),
-                    text_color: textcolor,
-                    border: Border::default(),
-                    shadow: Shadow::default(),
-                };
-                style
-            }
-            //button::primary(theme, status),
-        }
     }
     
 //    fn songsubscription(&self) -> Subscription<Message>{
@@ -200,8 +179,12 @@ impl App {
                 
                 //Task::none()
             },
-            Message::Menu => {
-                Task::done(Message::SpInit)
+            Message::Menu(item) => {
+                if item == "spotify" {
+                    Task::done(Message::SpInit)
+                } else {
+                    Task::none()
+                }
             },
             Message::Demo => {
                 self.track_name = "Track Name".to_string();
@@ -254,7 +237,62 @@ impl App {
             Message::SpShowCurrent => {
                 Task::none()
             },
+            Message::HideMenu => {
+                self.show_menu = false;
+                Task::none()
+            }
+            Message::ShowMenu => {
+                self.show_menu = true;
+                widget::focus_next()
+            }
         }
+    }
+
+    fn termtheme(&self) -> Theme {
+        let terminal: iced::theme::Palette = iced::theme::Palette{
+            background: BLACK,
+            text: SP_GREEN,
+            primary: DARK_GRAY,
+            success: Color{r: 0.0, g: 0.5, b: 0.0, a: 1.0},
+            danger: Color{r: 0.5, g: 0.0, b: 0.0, a: 1.0},
+        };
+        Theme::custom("Terminal".to_string(), terminal)
+    }
+    
+    fn btntheme(theme: &Theme, status: button::Status) -> button::Style {
+        let textcolor = theme.palette().text;
+        match status {
+            button::Status::Active => { 
+                let style = button::Style {
+                    background: Some(Background::Color(DARK_GRAY)),
+                    text_color: textcolor,
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                };
+                style
+            }
+            _ => {
+                let style = button::Style {
+                    background: Some(Background::Color(GRAY_HIGHLIGHT)),
+                    text_color: textcolor,
+                    border: Border::default(),
+                    shadow: Shadow::default(),
+                };
+                style
+            }
+            //button::primary(theme, status),
+        }
+    }
+
+    fn menu_style( _theme: &Theme) -> container::Style {
+        container::Style { 
+            text_color: Some(SP_GREEN), 
+            background: Some(Background::Color(DARK_GRAY)), 
+            ..Default::default() 
+        }
+    }
+    fn padded_button<Message: Clone>(label: &str,pad_x: u16, pad_y: u16) -> Button<'_, Message> {
+        button(text(label)).padding([pad_y, pad_x])
     }
 
     fn view(&self) -> Element<Message>{
@@ -264,11 +302,11 @@ impl App {
         let demo = button("demo")
             .on_press(Message::Demo)
             .style(Self::btntheme);
-        let exit = button("exit")
+        let exit: Button<'_, Message> = button("exit")
             .on_press(Message::Exit)
             .style(Self::btntheme);
-        let menu = button("menu")
-            .on_press(Message::Menu)
+        let menu:Button<'_, Message> = button("menu")
+            .on_press(Message::ShowMenu)
             .style(Self::btntheme);
         let fullscreen = button("Fullscreen")
             .on_press(Message::Fullscreen)
@@ -281,20 +319,68 @@ impl App {
             .size(TEXT_SIZE - 15)
             .center();
 
-        
         let coverart = iceimage(self.art.clone())
             .width(300);
-        
-        //let spotify_qr_code = qr_code(&self.sp_auth_url_data);
 
-        container(
+        let spotify = Self::padded_button("spotify", 40, 20)
+            .on_press(Message::Demo)
+            .style(Self::btntheme);
+        let settings = Self::padded_button("settings", 40, 20)
+            .on_press(Message::Demo)
+            .style(Self::btntheme);
+        
+
+        //let spotify_qr_code = qr_code(&self.sp_auth_url_data);
+        let main_page = container(
             column![
             row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),],
             //row![ spotify_qr_code ],
-        ]).into()
+        ]);
+
+        if self.show_menu {
+            let menu = container(
+        column![ spotify,
+                          settings,
+                    ]);
+            sidebar(main_page, menu, Message::HideMenu)
+        } else {
+            main_page.into()
+        }
     }
     
 }
 
+fn sidebar<'a, Message>(
+    base: impl Into<Element<'a, Message>>,
+    content: impl Into<Element<'a, Message>>,
+    on_blur: Message,
+) -> Element<'a, Message>
+where
+    Message: Clone + 'a,
+{
+    stack![
+        base.into(),
+        opaque(
+            mouse_area(  
+                container( container( column![ opaque(content) ].height(Length::Fill) ).style(App::menu_style) )
+                .align_right(Length::Fill)
+                .height(Length::Fill)
+                .style(|_theme| {
+                container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.8,
+                            ..Color::BLACK
+                        }
+                        .into(),
+                    ),
+                    ..container::Style::default()
+                }
+            }))
+            .on_press(on_blur)
+        )
+    ].height(Length::Fill)
+    .into()
+}
 
