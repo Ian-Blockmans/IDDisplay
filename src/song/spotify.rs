@@ -11,6 +11,7 @@ use std::fs::{self,File};
 use std::io::Write;
 
 use super::Song;
+use super::SongOrigin;
 
 //spotify
 //const CACHE_PATH: &str = "./tmp/";
@@ -58,7 +59,8 @@ pub async fn spotify_get_current(token: Token) -> Song{
     if current != None{
         match current.unwrap().item.unwrap() {
             PlayableItem::Track( t) => {
-                s.track_name = t.name
+                s.track_name = t.name;
+                s.origin = SongOrigin::Spotify
             }
             PlayableItem::Episode(_e) => {
                 //sould never happen

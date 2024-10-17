@@ -8,9 +8,10 @@ use cpal::{FromSample, Sample};
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::io::BufWriter;
+//use tokio::sync::Mutex as tokioMutex;
 
 
-use super::Song;
+use super::{Song, SongOrigin};
 
 static REC_TIME_S: u64 = 3;
 static WAIT_WHEN_CORRECT: u64 = 5;
@@ -20,10 +21,11 @@ static ARCHITECTURE: &str = env::consts::ARCH;
 
 pub async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
     if correct == true {
-        std::thread::sleep(std::time::Duration::from_secs(WAIT_WHEN_CORRECT)); //wait 60 if the correct song is found with reasable confidence
+        tokio::time::sleep(std::time::Duration::from_secs(WAIT_WHEN_CORRECT)).await; //wait 60 if the correct song is found with reasable confidence
     } else {
-        std::thread::sleep(std::time::Duration::from_secs(WAIT_REC)); //wait to slow down recognition, i don't want to spam shazam, might not be nesesairy 
+        tokio::time::sleep(std::time::Duration::from_secs(WAIT_REC)).await; //wait to slow down recognition, i don't want to spam shazam, might not be nesesairy 
     }
+    let tmpdir = tmp_dir.clone();
     let mut rectime = REC_TIME_S;
     let mut rec: std::result::Result<(), anyhow::Error>;
     let mut tracksong: Result<Song, anyhow::Error> = Ok(Song::default());
@@ -32,7 +34,8 @@ pub async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
     while tracksong.as_ref().unwrap().track_name == "nosong" && count <= 3 && tracksong.is_ok(){
         count += 1;
         rectime *= 2;
-        rec = rec_wav(tmp_dir.clone(), rectime); //record audio
+        
+        rec = rec_wav(tmpdir.clone(), rectime).await; //record audio
         if rec.is_err(){
             panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
         }
@@ -42,8 +45,11 @@ pub async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
             ret_error.error = tracksong.err().unwrap().to_string();
             return ret_error
         }
+        tokio::time::sleep(std::time::Duration::from_micros(1)).await; //exit point for tokio
     }
-    tracksong.unwrap()
+    let mut return_track = tracksong.unwrap();
+    return_track.origin = SongOrigin::Shazam;
+    return_track
 
 }
 
@@ -122,7 +128,7 @@ struct Opt {
     jack: bool,
 }
 
-fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
+async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let opt = Opt::parse();
 
     // Conditionally compile with jack if the feature is specified.
@@ -230,6 +236,8 @@ fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
 
     // Let recording go for roughly three seconds.
     std::thread::sleep(std::time::Duration::from_secs(time_s));
+    //tokio::time::sleep(std::time::Duration::from_secs(time_s)).await;
+
     drop(stream);
     writer.lock().unwrap().take().unwrap().finalize()?;
     println!("Recording {} complete!", spath);
@@ -306,13 +314,3 @@ async fn get_image<'a>(link: &'a str,store: String) -> Result<String, String> {
         }
     }
 }
-
-//let jstring = shazamrec()?;
-    //println!("song: {}", jstring);
-    //let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
-    //let mut song1 = Song { 
-    //    track_name: shazam_json_p["track"]["title"].as_str().unwrap().to_string(), 
-    //    artist_name: shazam_json_p["track"]["title"].as_str().unwrap().to_string(), 
-    //    art: shazam_json_p["track"]["images"]["coverart"].as_str().unwrap().to_string(), 
-    //};
-    //println!("song: {}", song1.track_name);

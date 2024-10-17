@@ -15,6 +15,7 @@ use tokio;
 
 mod song;
 use song::Song;
+use song::SongOrigin;
 use song::spotify;
 use song::rcognize;
 
@@ -86,8 +87,8 @@ enum Message {
     Fullscreen,
     ShowMenu,
     HideMenu,
+    SwitchPage(AppPage)
 //    Tick,
-//    None(()),
 }
 
 #[derive(Debug)]
@@ -102,7 +103,9 @@ struct App{
     correct: bool,
     sp_auth: rspotify::AuthCodeSpotify,
     sp_auth_url_data: qr_code::Data,
+    sp_init_done: bool,
     show_menu: bool,
+    page: AppPage,
 }
 
 impl Default for App {
@@ -122,7 +125,9 @@ impl App {
             correct: false,
             sp_auth: AuthCodeSpotify::default(),
             sp_auth_url_data: qr_code::Data::new( "http://localhost/").unwrap(),
+            sp_init_done: false,
             show_menu: false,
+            page: AppPage::Main,
         }
     }
 
@@ -137,6 +142,24 @@ impl App {
     fn update(&mut self, message: Message) -> Task<Message>{
         self.tmp_dir = TMP_DIR_S.to_string();
         match message {
+            Message::SwitchPage(page) => {
+                self.page = page;
+                match self.page {
+                    AppPage::Main => {
+                        Task::none()
+                    }
+                    AppPage::Settings => {
+                        Task::none()
+                    }
+                    AppPage::SpotifyLogin => {
+                        if self.sp_init_done {
+                            Task::done(Message::SpAuthOk)
+                        } else {
+                            Task::done(Message::SpInit)
+                        }
+                    }
+                }
+            }
 //            Message::Tick => {
 //                iced::Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
 //            }
@@ -174,7 +197,14 @@ impl App {
                         }
                         self.view();
                     }
-                    iced::Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
+                    match song.origin {
+                        SongOrigin::Shazam => {
+                            Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
+                        }
+                        SongOrigin::Spotify => {
+                            Task::none()
+                        }
+                    }
                 }
                 
                 //Task::none()
@@ -205,12 +235,10 @@ impl App {
                 self.winid = id;
                 Task::none()
             }
-//            Message::None(n) => {
-//                Task::none()
-//            },
             Message::SpShowQr(url) => {
                 self.sp_auth_url_data = qr_code::Data::new(url).unwrap();
                 tokio::spawn(spotify::spotify_callback(self.sp_auth.clone()));
+                self.sp_init_done = true;
                 Task::done(Message::SpAuthOk)
             },
             Message::SpAuthOk => {
@@ -219,7 +247,8 @@ impl App {
             Message::SpAuthError(res) => {
                 match res {
                     Ok(token) => {
-                        Task::perform(spotify::spotify_get_current(token),Message::DisplaySong)
+                        Task::none()
+                        //Task::perform(spotify::spotify_get_current(token),Message::DisplaySong)
                     }
                     Err(error) =>{
                         self.track_name = error;
@@ -296,6 +325,7 @@ impl App {
     }
 
     fn view(&self) -> Element<Message>{
+        // main window widgets
         let detect = button("detect")
             .on_press(Message::Detect)
             .style(Self::btntheme);
@@ -323,32 +353,60 @@ impl App {
             .width(300);
 
         let spotify = Self::padded_button("spotify", 40, 20)
-            .on_press(Message::Demo)
+            .on_press(Message::SwitchPage(AppPage::SpotifyLogin))
             .style(Self::btntheme);
         let settings = Self::padded_button("settings", 40, 20)
             .on_press(Message::Demo)
             .style(Self::btntheme);
         
 
-        //let spotify_qr_code = qr_code(&self.sp_auth_url_data);
+        //spotify login widgets
+        let sp_back = button("cancel")
+        .on_press(Message::SwitchPage(AppPage::Main))
+        .style(Self::btntheme);
+        let spotify_qr_code = qr_code(&self.sp_auth_url_data);
+
+
         let main_page = container(
             column![
             row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),],
             //row![ spotify_qr_code ],
         ]);
-
-        if self.show_menu {
-            let menu = container(
-        column![ spotify,
-                          settings,
-                    ]);
-            sidebar(main_page, menu, Message::HideMenu)
-        } else {
-            main_page.into()
+        
+        match self.page {
+            AppPage::Main => {
+                if self.show_menu {
+                    let menu = container(
+                column![ spotify,
+                                  settings,
+                            ]);
+                    sidebar(main_page, menu, Message::HideMenu)
+                } else {
+                    main_page.into()
+                }
+            }
+            AppPage::Settings => {
+                main_page.into()
+            }
+            AppPage::SpotifyLogin => {
+                let sp_page = column![
+                    row![ sp_back ],
+                    row![ spotify_qr_code ]
+                ];
+                sp_page.into()
+            }
         }
+        
     }
     
+}
+
+#[derive(Debug, Clone)]
+enum AppPage {
+    Main,
+    Settings,
+    SpotifyLogin,
 }
 
 fn sidebar<'a, Message>(
