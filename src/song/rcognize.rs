@@ -9,7 +9,6 @@ use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::io::BufWriter;
 
-
 use super::Song;
 
 static REC_TIME_S: u64 = 3;
@@ -42,6 +41,7 @@ pub async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
             ret_error.error = tracksong.err().unwrap().to_string();
             return ret_error
         }
+        tokio::time::sleep(std::time::Duration::from_micros(1)).await; //exit point for thread abort
     }
     tracksong.unwrap()
 
@@ -193,7 +193,6 @@ fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let err_fn = move |err| {
         eprintln!("an error occurred on stream: {}", err);
     };
-
     let stream = match config.sample_format() {
         cpal::SampleFormat::I8 => device.build_input_stream(
             &config.into(),
@@ -230,6 +229,7 @@ fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
 
     // Let recording go for roughly three seconds.
     std::thread::sleep(std::time::Duration::from_secs(time_s));
+
     drop(stream);
     writer.lock().unwrap().take().unwrap().finalize()?;
     println!("Recording {} complete!", spath);
@@ -306,13 +306,3 @@ async fn get_image<'a>(link: &'a str,store: String) -> Result<String, String> {
         }
     }
 }
-
-//let jstring = shazamrec()?;
-    //println!("song: {}", jstring);
-    //let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
-    //let mut song1 = Song { 
-    //    track_name: shazam_json_p["track"]["title"].as_str().unwrap().to_string(), 
-    //    artist_name: shazam_json_p["track"]["title"].as_str().unwrap().to_string(), 
-    //    art: shazam_json_p["track"]["images"]["coverart"].as_str().unwrap().to_string(), 
-    //};
-    //println!("song: {}", song1.track_name);
