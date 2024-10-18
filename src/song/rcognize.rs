@@ -8,10 +8,10 @@ use cpal::{FromSample, Sample};
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::io::BufWriter;
-//use tokio::sync::Mutex as tokioMutex;
+use tokio;
 
-
-use super::{Song, SongOrigin};
+use super::Song;
+use super::get_image;
 
 static REC_TIME_S: u64 = 3;
 static WAIT_WHEN_CORRECT: u64 = 5;
@@ -19,7 +19,7 @@ static WAIT_REC: u64 = 1; //wait to slow down recognition, i don't want to spam 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
 
-pub async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
+pub async fn startrecasy(correct: bool, tmp_dir: String) -> Result<Song, String>{
     if correct == true {
         tokio::time::sleep(std::time::Duration::from_secs(WAIT_WHEN_CORRECT)).await; //wait 60 if the correct song is found with reasable confidence
     } else {
@@ -41,15 +41,11 @@ pub async fn startrecasy(correct: bool, tmp_dir: String) -> Song{
         }
         tracksong = shazamrec(tmp_dir.clone()).await; //try to recognize song
         if tracksong.is_err() {
-            let mut ret_error = Song::default();
-            ret_error.error = tracksong.err().unwrap().to_string();
-            return ret_error
+            return Err(tracksong.err().unwrap().to_string());
         }
         tokio::time::sleep(std::time::Duration::from_micros(1)).await; //exit point for tokio
     }
-    let mut return_track = tracksong.unwrap();
-    return_track.origin = SongOrigin::Shazam;
-    return_track
+    Ok(tracksong.unwrap())
 
 }
 
@@ -84,17 +80,18 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
             nosong.track_name = "nosong".to_string();
             Ok(nosong)
         } else { // populate Song whit corect values
-            let imgpath;
+            let imgurl;
             if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
-                imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), tmp_dir.clone() + shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_").as_str() + ".jpg" ).await.unwrap();
+                imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
+                //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
             } else {
-                imgpath = "./unknown.png".to_string();
+                imgurl = "";
             }
             
             let mut song = Song::default();
             song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
             song.artist_name = shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string();
-            song.art = imgpath;
+            song.art_url = imgurl.to_string();
             Ok(song)
         }
     } else{
@@ -203,7 +200,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let stream = match config.sample_format() {
         cpal::SampleFormat::I8 => device.build_input_stream(
             &config.into(),
-            move |data, _: &_| write_input_data::<i8, i8>(data, &writer_2),
+             move |data, _: &_| write_input_data::<i8, i8>(data, &writer_2),
             err_fn,
             None,
         )?,
@@ -235,12 +232,14 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     stream.play()?;
 
     // Let recording go for roughly three seconds.
+
     std::thread::sleep(std::time::Duration::from_secs(time_s));
     //tokio::time::sleep(std::time::Duration::from_secs(time_s)).await;
 
     drop(stream);
     writer.lock().unwrap().take().unwrap().finalize()?;
     println!("Recording {} complete!", spath);
+    
     Ok(())
 }
 
@@ -278,39 +277,3 @@ where
     }
 }
 
-//needs to change name every time
-async fn get_image<'a>(link: &'a str,store: String) -> Result<String, String> {
-    let target = link;
-    let response;
-    match reqwest::get(target).await {
-        Ok(r) => {
-            match r.bytes().await {
-                Ok(r) => {
-                    response = r;
-                }
-                Err(e) => {
-                    return Err(e.to_string());
-                }
-            }
-        }
-        Err(e) => {
-            return Err(e.to_string());
-        }        
-    }
-
-    match image::load_from_memory(&response) {
-        Ok(img) => {
-            match img.save(&store) {
-                Ok( _img) => {
-                    return Ok(store.to_string());
-                }
-                Err(e) => {
-                    return Err(e.to_string());
-                }
-            }
-        }
-        Err(e) => {
-            return Err(e.to_string());
-        }
-    }
-}

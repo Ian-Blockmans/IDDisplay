@@ -6,7 +6,7 @@ use iced::{settings, window, Background, Border, Color, Renderer, Shadow, Size, 
 use iced::Element;
 //use iced::time::{self, Duration};
 use iced::{widget::{self, button, column, text, row, container, qr_code, stack, opaque,mouse_area,center, Button}, Length, Font, Alignment};
-use iced::widget::image as iceimage;
+use iced::widget::{image as iceimage, toggler};
 //use image::imageops::overlay;
 use std::fs::{self, remove_dir_all, create_dir};
 use anyhow::Result;
@@ -15,17 +15,17 @@ use tokio;
 
 mod song;
 use song::Song;
-use song::SongOrigin;
 use song::spotify;
 use song::rcognize;
-
+use song::spotify::SP_CACHE_PATH;
+use song::get_image;
 
 pub static CUSTOM_FONT: Font = Font::with_name("Less Perfect DOS VGA");
 pub mod bytes {
     pub static CUSTOM_FONT: &[u8] = include_bytes!("../LessPerfectDOSVGA.ttf");
 }
 
-pub static TMP_DIR_S: &str = "./tmp/"; 
+pub static TMP_DIR: &str = "./tmp/"; 
 static _EVERY_S: u64 = 3600; //run tick every amount of seconds
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
@@ -45,10 +45,13 @@ fn main() -> Result<(), anyhow::Error> {
     println!("Architecture: {}", ARCHITECTURE);
     let path = env::current_dir()?;
     println!("The current directory is {}", path.display());
-    if fs::exists(TMP_DIR_S)? {
-        remove_dir_all(TMP_DIR_S)?;
+    if fs::exists(TMP_DIR)? {
+        remove_dir_all(TMP_DIR)?;
     }
-    create_dir(TMP_DIR_S)?;
+    create_dir(TMP_DIR)?;
+    if !fs::exists("./spotify_cache/")?{
+        create_dir("./spotify_cache/")?;
+    }
     let fontbytes = bytes::CUSTOM_FONT;
     let set = settings::Settings{
         id: Some("app".to_string()),
@@ -64,22 +67,30 @@ fn main() -> Result<(), anyhow::Error> {
         .window_size(Size::new(800.0, 480.0))
         .run_with(App::startup)?;
     //iced::run("start", Song::update, Song::view)?;
-    remove_dir_all(TMP_DIR_S)?;
+    remove_dir_all(TMP_DIR)?;
     Ok(())
+}
+
+#[derive(Debug, Clone)]
+pub enum DisplayMode{
+    Shazam,
+    Spotify,
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     Detect,
     Exit,
-    DisplaySong(Song),
+    DisplaySong(Result<Song, String>),
+    DisplayImg(Result<String, String>),
     Menu(String),
     SpInit,
     SpSaveAuth(AuthCodeSpotify),
     SpShowQr(String),
     SpAuthOk,
     SpAuthError(Result<Token, String>),
-    SpShowCurrent,
+    SpModeRun,
+    SpModeToggle(bool),
     Demo,
     GetMainWinId,
     StoreMainWinId(window::Id),
@@ -93,19 +104,21 @@ enum Message {
 
 #[derive(Debug)]
 struct App{
-    track_name: String,
+    song: Song,
     track_name_prev: [String; 5],
     prev_index: usize,
-    artist_name: String,
-    art: String,
     tmp_dir: String,
     winid: window::Id,
     correct: bool,
     sp_auth: rspotify::AuthCodeSpotify,
     sp_auth_url_data: qr_code::Data,
     sp_init_done: bool,
+    sp_mode: bool,
     show_menu: bool,
     page: AppPage,
+    sp_callback_handle: Option<tokio::task::JoinHandle<()>>,
+    shazamming: bool,
+    display_mode: DisplayMode,
 }
 
 impl Default for App {
@@ -115,48 +128,60 @@ impl Default for App {
 impl App {
     fn default() -> App {
         App{ 
-            track_name: "nosong".to_string(),
+            song: Song::default(),
             track_name_prev: ("Previous Track-name0".to_string(), "Previous Track-name1".to_string(), "Previous Track-name2".to_string(), "Previous Track-name3".to_string(), "Previous Track-name4".to_string()).into(),
             prev_index: 0,
-            artist_name: "Artistname".to_string(),
-            art: "./unknown.png".to_string(),
-            tmp_dir: TMP_DIR_S.to_string(),
+            tmp_dir: TMP_DIR.to_string(),
             winid: window::Id::unique(),
             correct: false,
             sp_auth: AuthCodeSpotify::default(),
             sp_auth_url_data: qr_code::Data::new( "http://localhost/").unwrap(),
             sp_init_done: false,
+            sp_mode: false,
             show_menu: false,
             page: AppPage::Main,
+            sp_callback_handle: None,
+            shazamming: false,
+            display_mode: DisplayMode::Shazam,
         }
     }
 
     fn startup() -> (App, Task<Message>) {
-        (App::default(), Task::done(Message::GetMainWinId))
+        (App::default(), Task::batch(vec![Task::done(Message::GetMainWinId)]))
     }
     
 //    fn songsubscription(&self) -> Subscription<Message>{
 //        time::every(Duration::from_secs(EVERY_S)).map(|_| Message::Tick)
 //    }
-    
+
     fn update(&mut self, message: Message) -> Task<Message>{
-        self.tmp_dir = TMP_DIR_S.to_string();
+        self.tmp_dir = TMP_DIR.to_string();
         match message {
             Message::SwitchPage(page) => {
                 self.page = page;
                 match self.page {
                     AppPage::Main => {
+                        match &self.sp_callback_handle {
+                            Some(h)=>{
+                                h.abort();
+                                self.sp_callback_handle = None;
+                                if Token::from_cache(SP_CACHE_PATH).is_err(){
+                                    self.sp_init_done = false;
+                                }
+                            }
+                            None =>{}
+                        }
+                        self.show_menu = false;
                         Task::none()
                     }
                     AppPage::Settings => {
                         Task::none()
                     }
                     AppPage::SpotifyLogin => {
-                        if self.sp_init_done {
-                            Task::done(Message::SpAuthOk)
-                        } else {
-                            Task::done(Message::SpInit)
-                        }
+                        Task::none()
+                    }
+                    AppPage::SpotifySettings => {
+                        Task::none()
                     }
                 }
             }
@@ -164,50 +189,66 @@ impl App {
 //                iced::Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
 //            }
             Message::Detect => {
+                self.shazamming = true;
                 iced::Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
             }
             Message::Exit => {
                 iced::exit::<Message>()
             },
             Message::DisplaySong(song) => {
-                if song.error != "Ok".to_string() {
-                    self.track_name = "ShazamIO failed to execute".to_string();
-                    Task::none()
-                } else {
-                    self.correct = false;
-                    let mut matched = 0; //amount of time current song is found in previous
-                    self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
-                    if matched >= 1{
-                        self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
-                        self.track_name_prev = App::default().track_name_prev; //reset the previous song array
-                    }
+                match song {
+                    Ok(song) => {
+                        if self.song.track_name == song.track_name{
+                            match self.display_mode {
+                                DisplayMode::Shazam => {
+                                    return Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong);
+                                }
+                                DisplayMode::Spotify => {
+                                    return Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong);
+                                }
+                            }
+                        }
+                        self.correct = false;
+                        let mut matched = 0; //amount of time current song is found in previous
+                        self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
+                        if matched >= 1{
+                            self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
+                            self.track_name_prev = App::default().track_name_prev; //reset the previous song array
+                        }
 
-                    if song.track_name != "nosong".to_string(){
-                        self.track_name_prev[self.prev_index] = song.track_name.clone(); //load current song in previous songs if not "nosong"
-                    }
-                    if self.prev_index >= 5 {self.prev_index = 0}
+                        if song.track_name != "nosong".to_string(){
+                            self.track_name_prev[self.prev_index] = song.track_name.clone(); //load current song in previous songs if not "nosong"
+                        }
+                        if self.prev_index >= 5 {self.prev_index = 0}
 
-                    if song.track_name != "nosong" {
-                        self.track_name = song.track_name;
-                        self.artist_name = song.artist_name;
-                        if self.track_name == "No song detected".to_string(){
-                            self.art = "".to_string();
-                        } else {
-                            self.art = song.art.clone();
+                        if song.track_name != "nosong" {
+                            self.song = song.clone();
                         }
-                        self.view();
+                        match self.display_mode {
+                            DisplayMode::Shazam => {
+                                Task::batch(vec![Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong), Task::perform(get_image(song.art_url, song.track_name.replace(" ", "_") + ".jpg"), Message::DisplayImg)])
+                            }
+                            DisplayMode::Spotify => {
+                                Task::batch(vec![Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong), Task::perform(get_image(song.art_url, song.track_name.replace(" ", "_") + ".jpg"), Message::DisplayImg)])
+                            }
+                        }
                     }
-                    match song.origin {
-                        SongOrigin::Shazam => {
-                            Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
-                        }
-                        SongOrigin::Spotify => {
-                            Task::none()
-                        }
+                    Err(e) => {
+                        self.song.track_name = e;
+                        Task::none()
                     }
                 }
-                
-                //Task::none()
+            },
+            Message::DisplayImg(img_path) => {
+                match img_path {
+                    Ok(path) => {
+                        self.song.art_path = path;
+                    }
+                    Err(e) => {
+                        self.song.track_name = e;
+                    }
+                }
+                Task::none()
             },
             Message::Menu(item) => {
                 if item == "spotify" {
@@ -217,9 +258,9 @@ impl App {
                 }
             },
             Message::Demo => {
-                self.track_name = "Track Name".to_string();
-                self.artist_name = "Artist Name".to_string();
-                self.art = "./unknown.png".to_string();
+                self.song.track_name = "Track Name".to_string();
+                self.song.artist_name = "Artist Name".to_string();
+                self.song.art_path = "./unknown.png".to_string();
                 Task::none()
             },
             Message::FullscreenExec(id) => {
@@ -234,37 +275,76 @@ impl App {
             Message::StoreMainWinId(id) => {
                 self.winid = id;
                 Task::none()
-            }
+            },
+            Message::SpInit => {
+                if self.sp_init_done {
+                    Task::batch(vec![Task::done(Message::SpAuthOk), Task::done(Message::SwitchPage(AppPage::SpotifyLogin))])
+                } else if Token::from_cache(SP_CACHE_PATH).is_ok() {
+                    self.sp_init_done = true;
+                    Task::perform(spotify::spotify_init(), Message::SpSaveAuth)
+                    //Task::done(Message::SwitchPage(AppPage::SpotifySettings))
+                } else {
+                    Task::perform(spotify::spotify_init(), Message::SpSaveAuth)
+                }
+            },
             Message::SpShowQr(url) => {
                 self.sp_auth_url_data = qr_code::Data::new(url).unwrap();
-                tokio::spawn(spotify::spotify_callback(self.sp_auth.clone()));
+                self.sp_callback_handle = Some(tokio::spawn(spotify::spotify_callback(self.sp_auth.clone())));
+                //tokio::spawn(spotify::spotify_callback(self.sp_auth.clone()));
                 self.sp_init_done = true;
-                Task::done(Message::SpAuthOk)
+                Task::batch(vec![Task::done(Message::SpAuthOk),Task::done(Message::SwitchPage(AppPage::SpotifyLogin))])
             },
             Message::SpAuthOk => {
                 Task::perform(spotify::spotify_wait_for_token(self.sp_auth.clone()),Message::SpAuthError)
             },
             Message::SpAuthError(res) => {
                 match res {
-                    Ok(token) => {
-                        Task::none()
-                        //Task::perform(spotify::spotify_get_current(token),Message::DisplaySong)
+                    Ok(_token) => {
+                        //Task::none()
+                        match &self.sp_callback_handle {
+                            Some(h) => {
+                                h.abort();
+                                self.sp_callback_handle = None;
+                                if Token::from_cache(SP_CACHE_PATH).is_err(){
+                                    self.sp_init_done = false;
+                                }
+                            }
+                            None => {
+
+                            }
+                        }
+                        Task::batch(vec![Task::perform(spotify::spotify_get_current(self.sp_auth.clone()),Message::DisplaySong), Task::done(Message::SwitchPage(AppPage::Main))])
                     }
                     Err(error) =>{
-                        self.track_name = error;
+                        self.song.track_name = error;
                         Task::none()
                     }
                 }
             },
-            Message::SpInit => {
-                Task::perform(spotify::spotify_init(), Message::SpSaveAuth)
-            },
             Message::SpSaveAuth(auth) => {
                 self.sp_auth = auth;
-                Task::perform(spotify::spotify_qr(self.sp_auth.clone()), Message::SpShowQr)
+                if self.sp_init_done {
+                    Task::done(Message::SwitchPage(AppPage::SpotifySettings))
+                } else {
+                    Task::perform(spotify::spotify_qr(self.sp_auth.clone()), Message::SpShowQr)
+                }
             },
-            Message::SpShowCurrent => {
-                Task::none()
+            Message::SpModeRun => {
+                Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong)
+            },
+            Message::SpModeToggle(t) => {
+                match t {
+                    true => {
+                        self.sp_mode = true;
+                        self.display_mode = DisplayMode::Spotify;
+                        Task::done(Message::SpModeRun)
+                    }
+                    false => {
+                        self.sp_mode = false;
+                        self.display_mode = DisplayMode::Shazam;
+                        Task::none()
+                    }
+                }
             },
             Message::HideMenu => {
                 self.show_menu = false;
@@ -325,6 +405,11 @@ impl App {
     }
 
     fn view(&self) -> Element<Message>{
+        //multi use widgers
+        let home = button("return")
+            .on_press(Message::SwitchPage(AppPage::Main))
+            .style(Self::btntheme);
+
         // main window widgets
         let detect = button("detect")
             .on_press(Message::Detect)
@@ -342,18 +427,18 @@ impl App {
             .on_press(Message::Fullscreen)
             .style(Self::btntheme);
         
-        let trackname = text(self.track_name.clone())
+        let trackname = text(self.song.track_name.clone())
             .size(TEXT_SIZE)
             .center();
-        let artistname= text(self.artist_name.clone())
+        let artistname= text(self.song.artist_name.clone())
             .size(TEXT_SIZE - 15)
             .center();
 
-        let coverart = iceimage(self.art.clone())
+        let coverart = iceimage(self.song.art_path.clone())
             .width(300);
 
         let spotify = Self::padded_button("spotify", 40, 20)
-            .on_press(Message::SwitchPage(AppPage::SpotifyLogin))
+            .on_press(Message::SpInit)
             .style(Self::btntheme);
         let settings = Self::padded_button("settings", 40, 20)
             .on_press(Message::Demo)
@@ -366,13 +451,18 @@ impl App {
         .style(Self::btntheme);
         let spotify_qr_code = qr_code(&self.sp_auth_url_data);
 
+        //spotify settings widgets
+        let spotify_mode = toggler(self.sp_mode)
+            .label("Enable spotify mode")
+            .on_toggle(Message::SpModeToggle);
+
 
         let main_page = container(
             column![
             row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
-            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),],
+            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),].height(Length::Fill),
             //row![ spotify_qr_code ],
-        ]);
+        ].height(Length::Fill));
         
         match self.page {
             AppPage::Main => {
@@ -390,11 +480,21 @@ impl App {
                 main_page.into()
             }
             AppPage::SpotifyLogin => {
-                let sp_page = column![
+                let sp_login_page = column![
                     row![ sp_back ],
                     row![ spotify_qr_code ]
                 ];
-                sp_page.into()
+                sp_login_page.into()
+            }
+            AppPage::SpotifySettings => {
+                let sp_settings_page = column![
+                    spotify_mode,
+                    home,
+                ]
+                .align_x(Alignment::Center)
+                .width(Length::Fill)
+                .padding(20);
+                sp_settings_page.into()
             }
         }
         
@@ -407,6 +507,7 @@ enum AppPage {
     Main,
     Settings,
     SpotifyLogin,
+    SpotifySettings,
 }
 
 fn sidebar<'a, Message>(
