@@ -470,7 +470,7 @@ impl App {
             .on_toggle(Message::SpModeToggle);
 
         //shazam settings
-        let fast_mode = toggler(self.shazam_mode);
+        //let fast_mode = toggler(self.shazam_mode);
 
         let main_page = container(
             column![
