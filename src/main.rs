@@ -115,11 +115,16 @@ struct App{
     sp_auth_url_data: qr_code::Data,
     sp_init_done: bool,
     sp_mode: bool,
+    sp_poll_delay: u64,
     show_menu: bool,
     page: AppPage,
     sp_callback_handle: Option<tokio::task::JoinHandle<()>>,
     shazamming: bool,
     display_mode: DisplayMode,
+    shazam_mode: bool,
+    shazam_fast: bool,
+    shazam_positive_id_wait: u64,
+    shazam_id_wait: u64,
 }
 
 impl Default for App {
@@ -139,11 +144,16 @@ impl App {
             sp_auth_url_data: qr_code::Data::new( "http://localhost/").unwrap(),
             sp_init_done: false,
             sp_mode: false,
+            sp_poll_delay: 3,
             show_menu: false,
             page: AppPage::Main,
             sp_callback_handle: None,
             shazamming: false,
             display_mode: DisplayMode::Shazam,
+            shazam_fast: false,
+            shazam_mode: true,
+            shazam_positive_id_wait: 20,
+            shazam_id_wait: 3,
         }
     }
 
@@ -459,6 +469,8 @@ impl App {
             .label("Enable spotify mode")
             .on_toggle(Message::SpModeToggle);
 
+        //shazam settings
+        let fast_mode = toggler(self.shazam_mode));
 
         let main_page = container(
             column![
