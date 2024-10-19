@@ -10,10 +10,10 @@ use rspotify::prelude::{BaseClient, OAuthClient};
 use std::fs::{self,File};
 use std::io::Write;
 use tokio;
+use local_ip_address::local_ip;
 
 use super::Song;
 use super::super::TMP_DIR;
-use super::get_image;
 
 //spotify
 const CLIENT_ID: &str = "72707970d9254ea1baf38fff45afed06";
@@ -106,7 +106,9 @@ pub async fn spotify_get_current(sp_auth: AuthCodeSpotify) -> Result<Song, Strin
 }
 
 pub async fn spotify_callback(_sp_auth: AuthCodeSpotify){ //maybe remove sp_auth
-    let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 40)), 80);
+    //let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 40)), 80);
+    let socket = SocketAddr::new( local_ip().unwrap(), 80);
+    println!("{:?}", socket.clone());
     let route = warp::path!("callback")
         .and(warp::query::<HashMap<String, String>>())
         .map(move |map: HashMap<String, String>| {
@@ -134,6 +136,7 @@ pub async fn spotify_callback(_sp_auth: AuthCodeSpotify){ //maybe remove sp_auth
 }
 
 pub async fn spotify_init() -> AuthCodeSpotify {
+    //let ip = local_ip().unwrap();
     let token = Token::from_cache(SP_CACHE_PATH);
     match token {
         Ok(t)=>{
@@ -148,7 +151,7 @@ pub async fn spotify_init() -> AuthCodeSpotify {
                     "playlist-modify-private",
                     "playlist-modify-public"
                 ),
-                redirect_uri: "http://desktop.local/callback".to_owned(),
+                redirect_uri: "http://iddisplay.local/callback".to_string(),
                 ..Default::default()
             };
             let creds = Credentials::new(CLIENT_ID, CLIENT_SECRET);

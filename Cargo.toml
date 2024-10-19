@@ -13,6 +13,7 @@ anyhow = "1.0"
 image = { version = "0.25.2" }
 futures = "0.3"
 reqwest = { version = "0.12", features = ["blocking"] }
+local-ip-address = "0.6.3"
 tokio = { version = "1", features = ["full"] }
 #spotify
 rspotify = { version = "0.13.3"}

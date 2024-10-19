@@ -12,6 +12,7 @@ use std::fs::{self, remove_dir_all, create_dir};
 use anyhow::Result;
 use rspotify::{self, AuthCodeSpotify, Token};
 use tokio;
+use local_ip_address::local_ip;
 
 mod song;
 use song::Song;
@@ -277,13 +278,13 @@ impl App {
                 Task::none()
             },
             Message::SpInit => {
-                if self.sp_init_done {
-                    Task::batch(vec![Task::done(Message::SpAuthOk), Task::done(Message::SwitchPage(AppPage::SpotifyLogin))])
-                } else if Token::from_cache(SP_CACHE_PATH).is_ok() {
+                if self.sp_init_done { // spotify reay to go
+                    Task::done(Message::SwitchPage(AppPage::SpotifySettings))
+                } else if Token::from_cache(SP_CACHE_PATH).is_ok() { //token in cache but not setup
                     self.sp_init_done = true;
                     Task::perform(spotify::spotify_init(), Message::SpSaveAuth)
                     //Task::done(Message::SwitchPage(AppPage::SpotifySettings))
-                } else {
+                } else { //no token start login process
                     Task::perform(spotify::spotify_init(), Message::SpSaveAuth)
                 }
             },
@@ -313,7 +314,7 @@ impl App {
 
                             }
                         }
-                        Task::batch(vec![Task::perform(spotify::spotify_get_current(self.sp_auth.clone()),Message::DisplaySong), Task::done(Message::SwitchPage(AppPage::Main))])
+                        Task::done(Message::SwitchPage(AppPage::Main))
                     }
                     Err(error) =>{
                         self.song.track_name = error;
@@ -324,9 +325,9 @@ impl App {
             Message::SpSaveAuth(auth) => {
                 self.sp_auth = auth;
                 if self.sp_init_done {
-                    Task::done(Message::SwitchPage(AppPage::SpotifySettings))
+                    Task::done(Message::SwitchPage(AppPage::SpotifySettings)) //already have token 
                 } else {
-                    Task::perform(spotify::spotify_qr(self.sp_auth.clone()), Message::SpShowQr)
+                    Task::perform(spotify::spotify_qr(self.sp_auth.clone()), Message::SpShowQr) // get new token
                 }
             },
             Message::SpModeRun => {
@@ -450,6 +451,8 @@ impl App {
         .on_press(Message::SwitchPage(AppPage::Main))
         .style(Self::btntheme);
         let spotify_qr_code = qr_code(&self.sp_auth_url_data);
+        let login_message = text("Scan qr code -> login with spotify account -> if you get a message like \" could not connect \" edit the link and replace \"iddisplay.local whit the ip below\"");
+        let ip = text(local_ip().unwrap().to_string());
 
         //spotify settings widgets
         let spotify_mode = toggler(self.sp_mode)
@@ -481,7 +484,8 @@ impl App {
             }
             AppPage::SpotifyLogin => {
                 let sp_login_page = column![
-                    row![ sp_back ],
+                    row![ sp_back , login_message ],
+                    ip,
                     row![ spotify_qr_code ]
                 ];
                 sp_login_page.into()
