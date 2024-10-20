@@ -1,0 +1,22 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - run: dpkg --add-architecture x86_64
+    - run: apt-get update && apt-get install --assume-yes libssl-dev:x86_64 libasound2-dev:x86_64
+    - uses: actions/checkout@v4
+    - name: Build
+      run: cargo build --verbose
