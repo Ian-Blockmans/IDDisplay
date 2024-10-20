@@ -73,7 +73,7 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
     let pyerrout = str::from_utf8(&output.stderr).unwrap();
     if pyerrout.is_empty(){
         let jstring = str::from_utf8(&output.stdout)?.to_string();
-        println!("song: {}", jstring);
+        //println!("song: {}", jstring);
         let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
         if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
             let mut nosong = Song::default();
@@ -171,12 +171,12 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     }
     .expect("failed to find input device");
 
-    println!("Input device: {}", device.name()?);
+    //println!("Input device: {}", device.name()?);
 
     let config = device
         .default_input_config()
         .expect("Failed to get default input config");
-    println!("Default input config: {:?}", config);
+    //println!("Default input config: {:?}", config);
 
     // The WAV file we're recording to.
     let fullpath = (tmp_dir + "recorded.wav").as_str().to_owned();
@@ -186,7 +186,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let writer = Arc::new(Mutex::new(Some(writer)));
 
     // A flag to indicate that recording is in progress.
-    println!("Begin recording...");
+    //println!("Begin recording...");
 
     //TODO: split fn here ^ get config once v record 
 
@@ -194,7 +194,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let writer_2 = writer.clone();
 
     let err_fn = move |err| {
-        eprintln!("an error occurred on stream: {}", err);
+        //eprintln!("an error occurred on stream: {}", err);
     };
 
     let stream = match config.sample_format() {
@@ -238,7 +238,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
 
     drop(stream);
     writer.lock().unwrap().take().unwrap().finalize()?;
-    println!("Recording {} complete!", spath);
+    //println!("Recording {} complete!", spath);
     
     Ok(())
 }

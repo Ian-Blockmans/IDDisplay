@@ -1,3 +1,4 @@
+#![windows_subsystem = "windows"]
 use core::str;
 use std::env;
 use iced::overlay::menu::Catalog;
@@ -40,12 +41,11 @@ static DARK_BLUE: Color = Color{r: 0.12, g: 0.16, b:0.23, a: 1.0};
 static BACKGROUND_DARK_BLUE: Background = Background::Color(DARK_BLUE);
 static BACKGROUND_GRAY: Background = Background::Color(GRAY_HIGHLIGHT);
 
-
 fn main() -> Result<(), anyhow::Error> {
-    println!("OS: {}", OS);
-    println!("Architecture: {}", ARCHITECTURE);
+    //println!("OS: {}", OS);
+    //println!("Architecture: {}", ARCHITECTURE);
     let path = env::current_dir()?;
-    println!("The current directory is {}", path.display());
+    //println!("The current directory is {}", path.display());
     if fs::exists(TMP_DIR)? {
         remove_dir_all(TMP_DIR)?;
     }
@@ -92,6 +92,7 @@ enum Message {
     SpAuthError(Result<Token, String>),
     SpModeRun,
     SpModeToggle(bool),
+    ShazamMode(bool),
     Demo,
     GetMainWinId,
     StoreMainWinId(window::Id),
@@ -344,14 +345,13 @@ impl App {
                 Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong)
             },
             Message::SpModeToggle(t) => {
+                self.sp_mode = t;
                 match t {
                     true => {
-                        self.sp_mode = true;
                         self.display_mode = DisplayMode::Spotify;
                         Task::done(Message::SpModeRun)
                     }
                     false => {
-                        self.sp_mode = false;
                         self.display_mode = DisplayMode::Shazam;
                         Task::none()
                     }
@@ -360,11 +360,16 @@ impl App {
             Message::HideMenu => {
                 self.show_menu = false;
                 Task::none()
-            }
+            },
             Message::ShowMenu => {
                 self.show_menu = true;
                 widget::focus_next()
-            }
+            },
+            Message::ShazamMode(t) => {
+                self.shazam_mode = t;
+                self.display_mode = DisplayMode::Shazam;
+                Task::none()
+            },
         }
     }
 

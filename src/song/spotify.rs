@@ -108,7 +108,7 @@ pub async fn spotify_get_current(sp_auth: AuthCodeSpotify) -> Result<Song, Strin
 pub async fn spotify_callback(_sp_auth: AuthCodeSpotify){ //maybe remove sp_auth
     //let socket = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(192, 168, 1, 40)), 80);
     let socket = SocketAddr::new( local_ip().unwrap(), 80);
-    println!("{:?}", socket.clone());
+    //println!("{:?}", socket.clone());
     let route = warp::path!("callback")
         .and(warp::query::<HashMap<String, String>>())
         .map(move |map: HashMap<String, String>| {
