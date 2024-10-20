@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - run: apt-get update && apt-get install --assume-yes libssl-dev libasound2-dev
+    - run: sudo apt-get update && apt-get install --assume-yes libssl-dev libasound2-dev
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose
