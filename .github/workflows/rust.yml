@@ -47,7 +47,7 @@ jobs:
     - name: Build
       run: cargo build -r --verbose
     - name: copy executable to release folder
-      run: mkdir IDDisplay-v${{ steps.read_toml_version.outputs.value }} && cp -r unknown.png win-dist-x86_64 target/release/IDDisplay IDDisplay-v${{ steps.read_toml_version.outputs.value }}/
+      run: mkdir IDDisplay-v${{ steps.read_toml_version.outputs.value }} && cp -r unknown.png win-dist-x86_64 target/release/IDDisplay.exe IDDisplay-v${{ steps.read_toml_version.outputs.value }}/
     - name: create release archive
       uses: thedoctor0/zip-release@0.7.5
       with:
