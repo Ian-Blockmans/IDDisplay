@@ -17,3 +17,8 @@ jobs:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose
+    - name: save build
+      uses: actions/upload-artifact@v4
+      with:
+        name: executable
+        path: target/release/IDDiaplay
