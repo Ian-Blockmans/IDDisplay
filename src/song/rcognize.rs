@@ -1,4 +1,6 @@
+
 use std::env;
+use std::os::windows::process::CommandExt;
 use std::process::Command;
 use core::str;
 use serde_json::Value;
@@ -55,7 +57,7 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
     let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
     // use the right python envirement for windows or linux
     if OS == "windows" {
-        output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe")
+        output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe").creation_flags(0x08000000)
             .args([(tmp_dir.clone()+"recorded.wav").as_str()])
 //            .args(["ShazamIO.py", "song.wav"])
             .output()?;
