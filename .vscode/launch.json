@@ -8,7 +8,7 @@
             "type": "lldb",
             "request": "launch",
             "name": "Debug",
-            "program": "${workspaceFolder}/target/debug/MusicDisplay",
+            "program": "${workspaceFolder}/target/debug/IDDisplay",
             "cargo": {
                 "args": [
                     "build",

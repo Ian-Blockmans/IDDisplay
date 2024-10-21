@@ -1,12 +1,11 @@
-#![windows_subsystem = "windows"]
+//#![windows_subsystem = "windows"]
 use core::str;
 use std::env;
-use iced::overlay::menu::Catalog;
-use iced::{settings, window, Background, Border, Color, Renderer, Shadow, Size, Task, Theme};
+use iced::{settings, window, Background, Border, Color, Shadow, Size, Task, Theme};
 //use iced::Subscription;
 use iced::Element;
 //use iced::time::{self, Duration};
-use iced::{widget::{self, button, column, text, row, container, qr_code, stack, opaque,mouse_area,center, Button}, Length, Font, Alignment};
+use iced::{widget::{self, button, column, text, row, container, qr_code, stack, opaque,mouse_area, Button}, Length, Font, Alignment};
 use iced::widget::{image as iceimage, toggler};
 //use image::imageops::overlay;
 use std::fs::{self, remove_dir_all, create_dir};
@@ -40,12 +39,13 @@ static BLACK: Color = Color{r: 0.0, g: 0.0, b:0.0, a: 1.0};
 static DARK_BLUE: Color = Color{r: 0.12, g: 0.16, b:0.23, a: 1.0};
 static BACKGROUND_DARK_BLUE: Background = Background::Color(DARK_BLUE);
 static BACKGROUND_GRAY: Background = Background::Color(GRAY_HIGHLIGHT);
+static POSITIVE_ID_COUNT: usize = 1; //amount of ids before song asumed to be correct
 
 fn main() -> Result<(), anyhow::Error> {
-    //println!("OS: {}", OS);
-    //println!("Architecture: {}", ARCHITECTURE);
+    println!("OS: {}", OS);
+    println!("Architecture: {}", ARCHITECTURE);
     let path = env::current_dir()?;
-    //println!("The current directory is {}", path.display());
+    println!("The current directory is {}", path.display());
     if fs::exists(TMP_DIR)? {
         remove_dir_all(TMP_DIR)?;
     }
@@ -80,19 +80,18 @@ pub enum DisplayMode{
 
 #[derive(Debug, Clone)]
 enum Message {
-    Detect,
+    Start(DisplayMode),
     Exit,
     DisplaySong(Result<Song, String>),
     DisplayImg(Result<String, String>),
-    Menu(String),
     SpInit,
     SpSaveAuth(AuthCodeSpotify),
     SpShowQr(String),
     SpAuthOk,
     SpAuthError(Result<Token, String>),
-    SpModeRun,
     SpModeToggle(bool),
     ShazamMode(bool),
+    ShazamFastMode(bool),
     Demo,
     GetMainWinId,
     StoreMainWinId(window::Id),
@@ -120,7 +119,6 @@ struct App{
     show_menu: bool,
     page: AppPage,
     sp_callback_handle: Option<tokio::task::JoinHandle<()>>,
-    shazamming: bool,
     display_mode: DisplayMode,
     shazam_mode: bool,
     shazam_fast: bool,
@@ -149,7 +147,6 @@ impl App {
             show_menu: false,
             page: AppPage::Main,
             sp_callback_handle: None,
-            shazamming: false,
             display_mode: DisplayMode::Shazam,
             shazam_fast: false,
             shazam_mode: true,
@@ -186,7 +183,7 @@ impl App {
                         self.show_menu = false;
                         Task::none()
                     }
-                    AppPage::Settings => {
+                    AppPage::ShazamSettings => {
                         Task::none()
                     }
                     AppPage::SpotifyLogin => {
@@ -200,9 +197,14 @@ impl App {
 //            Message::Tick => {
 //                iced::Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
 //            }
-            Message::Detect => {
-                self.shazamming = true;
-                iced::Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong)
+            Message::Start(mode) => {
+                match mode {
+                    DisplayMode::Shazam => {
+                    }
+                    DisplayMode::Spotify => {
+                    }
+                }
+                Task::done(Message::DisplaySong(Ok(self.song.clone())))
             }
             Message::Exit => {
                 iced::exit::<Message>()
@@ -210,22 +212,33 @@ impl App {
             Message::DisplaySong(song) => {
                 match song {
                     Ok(song) => {
-                        if self.song.track_name == song.track_name{
+                        self.correct = false;
+                        let mut matched = 0; //amount of time current song is found in previous
+                        self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
+                        if matched >= POSITIVE_ID_COUNT{
+                            self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning this is to reduce flipfloping between wrong ids for harder to recognize songs
+                            self.track_name_prev = App::default().track_name_prev; //reset the previous song array
+                        } //can be disabled with fast mode
+
+                        if self.song.track_name == song.track_name{ //if track not changed
                             match self.display_mode {
                                 DisplayMode::Shazam => {
-                                    return Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong);
+                                    return Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone(), self.shazam_fast), Message::DisplaySong);
                                 }
                                 DisplayMode::Spotify => {
                                     return Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong);
                                 }
                             }
                         }
-                        self.correct = false;
-                        let mut matched = 0; //amount of time current song is found in previous
-                        self.track_name_prev.iter().for_each(|s| if *s == song.track_name { matched += 1 }); //inc matched if a trackname matches
-                        if matched >= 1{
-                            self.correct = true; //set correct to true so the next thread will wait a bit before resuming scanning
-                            self.track_name_prev = App::default().track_name_prev; //reset the previous song array
+                        if self.song.art_path != "./unknown.png" {
+                            match fs::remove_file(self.song.art_path.clone()) {
+                                Ok(_f) => {
+    
+                                }
+                                Err(_e) => {
+    
+                                }
+                            }
                         }
 
                         if song.track_name != "nosong".to_string(){
@@ -238,7 +251,7 @@ impl App {
                         }
                         match self.display_mode {
                             DisplayMode::Shazam => {
-                                Task::batch(vec![Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone()), Message::DisplaySong), Task::perform(get_image(song.art_url, song.track_name.replace(" ", "_") + ".jpg"), Message::DisplayImg)])
+                                Task::batch(vec![Task::perform(rcognize::startrecasy(self.correct.clone(), self.tmp_dir.clone(), self.shazam_fast), Message::DisplaySong), Task::perform(get_image(song.art_url, song.track_name.replace(" ", "_") + ".jpg"), Message::DisplayImg)])
                             }
                             DisplayMode::Spotify => {
                                 Task::batch(vec![Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong), Task::perform(get_image(song.art_url, song.track_name.replace(" ", "_") + ".jpg"), Message::DisplayImg)])
@@ -261,13 +274,6 @@ impl App {
                     }
                 }
                 Task::none()
-            },
-            Message::Menu(item) => {
-                if item == "spotify" {
-                    Task::done(Message::SpInit)
-                } else {
-                    Task::none()
-                }
             },
             Message::Demo => {
                 self.song.track_name = "Track Name".to_string();
@@ -319,13 +325,14 @@ impl App {
                                 self.sp_callback_handle = None;
                                 if Token::from_cache(SP_CACHE_PATH).is_err(){
                                     self.sp_init_done = false;
+                                    return Task::done(Message::SwitchPage(AppPage::SpotifyLogin));
                                 }
+                                Task::done(Message::SwitchPage(AppPage::SpotifySettings))
                             }
                             None => {
-
+                                Task::none()
                             }
                         }
-                        Task::done(Message::SwitchPage(AppPage::Main))
                     }
                     Err(error) =>{
                         self.song.track_name = error;
@@ -341,17 +348,16 @@ impl App {
                     Task::perform(spotify::spotify_qr(self.sp_auth.clone()), Message::SpShowQr) // get new token
                 }
             },
-            Message::SpModeRun => {
-                Task::perform(spotify::spotify_get_current(self.sp_auth.clone()), Message::DisplaySong)
-            },
             Message::SpModeToggle(t) => {
                 self.sp_mode = t;
                 match t {
                     true => {
+                        self.shazam_mode = false;
                         self.display_mode = DisplayMode::Spotify;
-                        Task::done(Message::SpModeRun)
+                        Task::none()
                     }
                     false => {
+                        self.shazam_mode = true;
                         self.display_mode = DisplayMode::Shazam;
                         Task::none()
                     }
@@ -367,7 +373,21 @@ impl App {
             },
             Message::ShazamMode(t) => {
                 self.shazam_mode = t;
-                self.display_mode = DisplayMode::Shazam;
+                match t {
+                    true => {
+                        self.display_mode = DisplayMode::Shazam;
+                        self.sp_mode = false;
+                        Task::none()
+                    }
+                    false => {
+                        self.display_mode = DisplayMode::Spotify;
+                        self.sp_mode = false;
+                        Task::none()
+                    }
+                }
+            },
+            Message::ShazamFastMode(t) => {
+                self.shazam_fast = t;
                 Task::none()
             },
         }
@@ -427,11 +447,8 @@ impl App {
             .style(Self::btntheme);
 
         // main window widgets
-        let detect = button("detect")
-            .on_press(Message::Detect)
-            .style(Self::btntheme);
-        let demo = button("demo")
-            .on_press(Message::Demo)
+        let detect = button("Start")
+            .on_press(Message::Start(self.display_mode.clone()))
             .style(Self::btntheme);
         let exit: Button<'_, Message> = button("exit")
             .on_press(Message::Exit)
@@ -454,10 +471,12 @@ impl App {
             .width(300);
 
         let spotify = Self::padded_button("spotify", 40, 20)
+            .width(180)
             .on_press(Message::SpInit)
             .style(Self::btntheme);
-        let settings = Self::padded_button("settings", 40, 20)
-            .on_press(Message::Demo)
+        let shazam = Self::padded_button("shazam", 40, 20)
+            .width(180)
+            .on_press(Message::SwitchPage(AppPage::ShazamSettings))
             .style(Self::btntheme);
         
 
@@ -466,22 +485,26 @@ impl App {
         .on_press(Message::SwitchPage(AppPage::Main))
         .style(Self::btntheme);
         let spotify_qr_code = qr_code(&self.sp_auth_url_data);
-        let login_message = text("Scan qr code -> login with spotify account -> if you get a message like \" could not connect \" edit the link and replace \"iddisplay.local whit the ip below\"");
+        let login_message = text("if you get a prompt to allow network acces press allow. Scan qr code -> login with spotify account -> if you get a message like \" could not connect \" edit the link and replace \"iddisplay.local whit the ip below\"");
         let ip = text(local_ip().unwrap().to_string());
 
         //spotify settings widgets
         let spotify_mode = toggler(self.sp_mode)
-            .label("Enable spotify mode")
+            .label("Enable spotify display mode")
             .on_toggle(Message::SpModeToggle);
 
         //shazam settings
-        //let fast_mode = toggler(self.shazam_mode);
+        let shazam_mode = toggler(self.shazam_mode)
+            .label("Enable shazam display mode")
+            .on_toggle(Message::ShazamMode);
+        let fast_mode = toggler(self.shazam_fast)
+            .label("Enable fast mode")
+            .on_toggle(Message::ShazamFastMode);
 
         let main_page = container(
             column![
-            row![ column![ row![ detect,exit,demo,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+            row![ column![ row![ detect,exit,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
             row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),].height(Length::Fill),
-            //row![ spotify_qr_code ],
         ].height(Length::Fill));
         
         match self.page {
@@ -489,19 +512,28 @@ impl App {
                 if self.show_menu {
                     let menu = container(
                 column![ spotify,
-                                  settings,
+                                  shazam,
                             ]);
                     sidebar(main_page, menu, Message::HideMenu)
                 } else {
                     main_page.into()
                 }
             }
-            AppPage::Settings => {
-                main_page.into()
+            AppPage::ShazamSettings => {
+                let shazam_settings_page = column![
+                    shazam_mode,
+                    fast_mode,
+                    home,
+                ]
+                .align_x(Alignment::Center)
+                .width(Length::Fill)
+                .padding(20);
+                shazam_settings_page.into()
             }
             AppPage::SpotifyLogin => {
                 let sp_login_page = column![
-                    row![ sp_back , login_message ],
+                    row![ sp_back ],
+                    login_message,
                     ip,
                     row![ spotify_qr_code ]
                 ];
@@ -526,7 +558,7 @@ impl App {
 #[derive(Debug, Clone)]
 enum AppPage {
     Main,
-    Settings,
+    ShazamSettings,
     SpotifyLogin,
     SpotifySettings,
 }

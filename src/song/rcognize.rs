@@ -14,15 +14,17 @@ use super::Song;
 use super::get_image;
 
 static REC_TIME_S: u64 = 3;
-static WAIT_WHEN_CORRECT: u64 = 5;
-static WAIT_REC: u64 = 1; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
+static WAIT_WHEN_CORRECT: u64 = 20;
+static WAIT_REC: u64 = 3; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
 
-pub async fn startrecasy(correct: bool, tmp_dir: String) -> Result<Song, String>{
-    if correct == true {
+pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<Song, String>{
+    if correct == true && fast == false {
+        println!("waiting {}s", WAIT_WHEN_CORRECT);
         tokio::time::sleep(std::time::Duration::from_secs(WAIT_WHEN_CORRECT)).await; //wait 60 if the correct song is found with reasable confidence
-    } else {
+    } else if fast == false {
+        println!("waiting {}s", WAIT_REC);
         tokio::time::sleep(std::time::Duration::from_secs(WAIT_REC)).await; //wait to slow down recognition, i don't want to spam shazam, might not be nesesairy 
     }
     let tmpdir = tmp_dir.clone();
@@ -73,7 +75,7 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
     let pyerrout = str::from_utf8(&output.stderr).unwrap();
     if pyerrout.is_empty(){
         let jstring = str::from_utf8(&output.stdout)?.to_string();
-        //println!("song: {}", jstring);
+        println!("song: {}", jstring);
         let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
         if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
             let mut nosong = Song::default();
@@ -96,7 +98,7 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
         }
     } else{
         let errorout = str::from_utf8(&output.stderr)?.to_owned();
-        //println!("Error: {}", errorout);
+        println!("Error: {}", errorout);
         Err(anyhow::Error::msg(errorout))
     }
    
@@ -186,7 +188,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let writer = Arc::new(Mutex::new(Some(writer)));
 
     // A flag to indicate that recording is in progress.
-    //println!("Begin recording...");
+    println!("Begin recording...");
 
     //TODO: split fn here ^ get config once v record 
 
@@ -194,7 +196,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let writer_2 = writer.clone();
 
     let err_fn = move |err| {
-        //eprintln!("an error occurred on stream: {}", err);
+        println!("an error occurred on stream: {}", err);
     };
 
     let stream = match config.sample_format() {
@@ -238,7 +240,7 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
 
     drop(stream);
     writer.lock().unwrap().take().unwrap().finalize()?;
-    //println!("Recording {} complete!", spath);
+    println!("Recording {} complete!", spath);
     
     Ok(())
 }

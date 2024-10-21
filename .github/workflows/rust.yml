@@ -8,17 +8,80 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  build-linux-x86_64:
     runs-on: ubuntu-latest
-
     steps:
     - run: sudo apt-get update && sudo apt-get install --assume-yes libssl-dev libasound2-dev
     - uses: actions/checkout@v4
+    - name: get version number
+      uses: SebRollen/toml-action@v1.2.0
+      id: read_toml_version
+      with:
+        file: 'Cargo.toml'
+        field: 'package.version'
     - name: Build
-      run: cargo build --verbose
+      run: cargo build -r --verbose
+    - name: copy executable to release folder
+      run: mkdir IDDisplay-v${{ steps.read_toml_version.outputs.value }} && cp target/release/IDDisplay IDDisplay-v${{ steps.read_toml_version.outputs.value }}/ && cp -r lx-dist-x86_64 IDDisplay-v${{ steps.read_toml_version.outputs.value }}/
+    - name: create release archive
+      uses: thedoctor0/zip-release@0.7.5
+      with:
+        type: 'tar'
+        filename: 'iddisplay-release-linux-x86_64.tar'
+        path: IDDisplay-v${{ steps.read_toml_version.outputs.value }}
     - name: save build
       uses: actions/upload-artifact@v4
       with:
-        name: executable
-        path: target/release/IDDiaplay
+        name: linux-x86_64-release
+        path: iddisplay-release-linux-x86_64.tar
+  build-windows-x86_64:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: get version number
+      uses: SebRollen/toml-action@v1.2.0
+      id: read_toml_version
+      with:
+        file: 'Cargo.toml'
+        field: 'package.version'
+    - name: Build
+      run: cargo build -r --verbose
+    - name: copy executable to release folder
+      run: mkdir IDDisplay-v${{ steps.read_toml_version.outputs.value }} && cp target/release/IDDisplay.exe IDDisplay-v${{ steps.read_toml_version.outputs.value }}/ && cp -r win-dist-x86_64 IDDisplay-v${{ steps.read_toml_version.outputs.value }}/
+    - name: create release archive
+      uses: thedoctor0/zip-release@0.7.5
+      with:
+        type: 'zip'
+        filename: 'iddisplay-release-windows-x86_64.zip'
+        path: IDDisplay-v${{ steps.read_toml_version.outputs.value }}
+    - name: save build
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-x86_64-release
+        path: iddisplay-release-windows-x86_64.zip
+  build-linux-arm64:
+    runs-on: [self-hosted, linux, ARM64]
+    steps:
+    #- run: sudo apt-get update && sudo apt-get install --assume-yes libssl-dev libasound2-dev
+    - uses: actions/checkout@v4
+    - name: get version number
+      uses: SebRollen/toml-action@v1.2.0
+      id: read_toml_version
+      with:
+        file: 'Cargo.toml'
+        field: 'package.version'
+    - name: Build
+      run: cargo build -r --verbose
+    - name: copy executable to release folder
+      run: mkdir IDDisplay-v${{ steps.read_toml_version.outputs.value }} && cp target/release/IDDisplay IDDisplay-v${{ steps.read_toml_version.outputs.value }}/ && cp -r lx-dist-aarch64 IDDisplay-v${{ steps.read_toml_version.outputs.value }}/
+    - name: create release archive
+      uses: thedoctor0/zip-release@0.7.5
+      with:
+        type: 'tar'
+        filename: 'iddisplay-release-linux-arm64.tar'
+        path: IDDisplay-v${{ steps.read_toml_version.outputs.value }}
+    - name: save build
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-arm64-release
+        path: iddisplay-release-linux-arm64.tar
