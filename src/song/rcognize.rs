@@ -52,28 +52,15 @@ pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<S
     Ok(tracksong.unwrap())
 
 }
-
+#[cfg(target_os = "windows")]
 async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
     let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
-    // use the right python envirement for windows or linux
-    if OS == "windows" {
-        output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe").creation_flags(0x08000000)
-            .args([(tmp_dir.clone()+"recorded.wav").as_str()])
-//            .args(["ShazamIO.py", "song.wav"])
-            .output()?;
-    } else if OS == "linux" {
-        if ARCHITECTURE == "aarch64" {
-            output = Command::new("./lx-dist-aarch64/ShazamIO/ShazamIO")
-            .args([(tmp_dir.clone()+"recorded.wav").as_str()])
-//            .args(["ShazamIO.py", "song.wav"])
-            .output()?;
-        } else if ARCHITECTURE == "x86_64" {
-            output = Command::new("./lx-dist-x86_64/ShazamIO/ShazamIO")
-            .args([(tmp_dir.clone()+"recorded.wav").as_str()])
-//            .args(["ShazamIO.py", "song.wav"])
-            .output()?;
-        }
-    }
+
+    output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe").creation_flags(0x08000000)
+        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
+//      .args(["ShazamIO.py", "song.wav"])
+        .output()?;
+
     let pyerrout = str::from_utf8(&output.stderr).unwrap();
     if pyerrout.is_empty(){
         let jstring = str::from_utf8(&output.stdout)?.to_string();
@@ -106,6 +93,54 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
    
 }
 
+#[cfg(target_os = "linux")]
+async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
+    let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
+    // use the right python envirement for architecture
+    
+    if ARCHITECTURE == "aarch64" {
+        output = Command::new("./lx-dist-aarch64/ShazamIO/ShazamIO")
+        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
+//      .args(["ShazamIO.py", "song.wav"])
+        .output()?;
+    } else if ARCHITECTURE == "x86_64" {
+        output = Command::new("./lx-dist-x86_64/ShazamIO/ShazamIO")
+        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
+//      .args(["ShazamIO.py", "song.wav"])
+        .output()?;
+    }
+
+    let pyerrout = str::from_utf8(&output.stderr).unwrap();
+    if pyerrout.is_empty(){
+        let jstring = str::from_utf8(&output.stdout)?.to_string();
+        println!("song: {}", jstring);
+        let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
+        if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
+            let mut nosong = Song::default();
+            nosong.track_name = "nosong".to_string();
+            Ok(nosong)
+        } else { // populate Song whit corect values
+            let imgurl;
+            if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
+                imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
+                //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
+            } else {
+                imgurl = "";
+            }
+            
+            let mut song = Song::default();
+            song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
+            song.artist_name = shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string();
+            song.art_url = imgurl.to_string();
+            Ok(song)
+        }
+    } else{
+        let errorout = str::from_utf8(&output.stderr)?.to_owned();
+        println!("Error: {}", errorout);
+        Err(anyhow::Error::msg(errorout))
+    }
+   
+}
 
 #[derive(Parser, Debug)]
 #[command(version, about = "CPAL record_wav example", long_about = None)]
