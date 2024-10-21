@@ -22,6 +22,7 @@ You can also use the spotify mode by pressing menu -> spotify. Then login by sca
 - Check the volume of the default recording device.
 - Try shazam on your phone in the same location as the microphone used for IDDisplay.
 - Make sure no audio processing software is running like a noise gate.
+- On linux make sure lx-dist-(arch)/ShazamIO/ShazamIO has execution permissions
 
 ## quirks and features
 
