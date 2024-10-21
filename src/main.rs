@@ -1,4 +1,4 @@
-//#![windows_subsystem = "windows"]
+#![windows_subsystem = "windows"]
 use core::str;
 use std::env;
 use iced::{settings, window, Background, Border, Color, Shadow, Size, Task, Theme};
