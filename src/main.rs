@@ -62,7 +62,7 @@ fn main() -> Result<(), anyhow::Error> {
         antialiasing: false,
     };
     //iced::application("ShazamDisplay", Song::update, Song::view).subscription(Song::songsubscription).run()?; // run songsubscription EVERY_S as a tick
-    iced::application("ShazamDisplay", App::update, App::view)
+    iced::application("IDDisplay", App::update, App::view)
         .settings(set)
         .theme(App::termtheme)
         .window_size(Size::new(800.0, 480.0))
