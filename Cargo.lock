@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "MusicDisplay"
+name = "IDDisplay"
 version = "0.1.0"
 dependencies = [
  "anyhow",
