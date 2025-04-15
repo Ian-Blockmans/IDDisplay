@@ -13,7 +13,7 @@ release-build:
      - echo "installing dependencies"
      - apk update
      - apk add pkgconf build-base alsa-lib-dev
-     - apk add libressl-dev=3.9.2-r0 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/main
+     - apk add libressl-dev=3.8.4-r0 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/main
      - echo "Building Release"
      - cargo build -r --verbose
      - ls -l
