@@ -9,11 +9,13 @@ release-build:
      - rust
    rules:
      - if: $CI_COMMIT_BRANCH == "release"
+   image: rust:slim
    script:
      - echo "installing dependencies"
-     - apk update
-     - apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
-     - apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
+     - sudo apt-get update && sudo apt-get install --assume-yes build-essential libssl-dev libasound2-dev
+     #- apk update
+     #- apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
+     #- apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
      - echo "Building Release"
      - cargo build -r --verbose
      - ls -l
