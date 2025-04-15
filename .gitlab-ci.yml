@@ -12,10 +12,13 @@ release-build:
    image: rust:slim
    script:
      - echo "installing dependencies"
-     - apt-get update && apt-get install --assume-yes build-essential pkg-config libssl-dev libasound2-dev
+     - apt-get update && apt-get install --assume-yes build-essential pkg-config libssl-dev libasound2-dev wget
+     - wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq &&\
+     - chmod +x /usr/bin/yq
      #- apk update
      #- apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
      #- apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
      - echo "Building Release"
-     - cargo build -r --verbose
+     #- cargo build -r --verbose
      - ls -l
+     - yq 'package.version' Cargo.toml
