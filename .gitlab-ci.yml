@@ -11,7 +11,7 @@ release-build:
      - if: $CI_COMMIT_BRANCH == "release"
    script:
      - echo "installing dependencies"
-     - apk add pkgconf build-base openssl-dev alsa-lib-dev
+     - apk update && apk add pkgconf build-base libressl-dev=3.9.2-r0 alsa-lib-dev
      - echo "Building Release"
      - cargo build -r --verbose
      - ls -l
