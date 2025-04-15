@@ -11,6 +11,6 @@ release-build:
      - if: $CI_COMMIT_BRANCH == "release"
    script:
      - echo "installing dependencies"
-     - apk add musl-dev openssl
+     - apk add musl-dev openssl-dev
      - echo "Building Release"
      - cargo build -r --verbose
