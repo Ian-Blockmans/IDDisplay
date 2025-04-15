@@ -12,7 +12,7 @@ release-build:
    script:
      - echo "installing dependencies"
      - apk update
-     - apk add pkgconf build-base alsa-lib-dev
+     - apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
      - apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
      - echo "Building Release"
      - cargo build -r --verbose
