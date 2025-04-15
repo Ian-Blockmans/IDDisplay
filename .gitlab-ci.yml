@@ -1,0 +1,15 @@
+stages:
+  - build
+  - release
+
+
+release-build:
+   stage: build
+   tags: 
+     - rust
+   rules:
+     - if: $CI_COMMIT_BRANCH == "release"
+   script:
+     - echo "Building Release"
+     - cargo build -r --verbose
+
