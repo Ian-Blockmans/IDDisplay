@@ -21,4 +21,4 @@ release-build:
      - echo "Building Release"
      #- cargo build -r --verbose
      - ls -l
-     - yq 'package.version' Cargo.toml
+     - yq '.package.version' Cargo.toml
