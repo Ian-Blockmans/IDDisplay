@@ -24,11 +24,12 @@ build:
     #- apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
     #- apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
     - echo "Building Release"
-    - cargo build -r --verbose
+    #- cargo build -r --verbose
     - ls -l
     - echo "VERSION=$(yq '.package.version' Cargo.toml)" > build.env
     - echo "LINUX_BINARY=IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz" >> build.env
-    - mkdir IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    #- mkdir IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    - mkdir IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 IDDisplay-v$(yq '.package.version' Cargo.toml)/
     - tar -czf IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz IDDisplay-v$(yq '.package.version' Cargo.toml)
     - mkdir bin
     - mv IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz bin/
@@ -47,6 +48,7 @@ upload:
     - if: $CI_COMMIT_BRANCH == "release"
   script:
     - |
+      ls ./bin/ -l
       curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ./bin/linux-x86_64-IDDisplay-v$VERSION.tar.gz "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION/$LINUX_BINARY"
       echo "PACKAGE_REGISTRY_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION" >> build.env
   artifacts:
