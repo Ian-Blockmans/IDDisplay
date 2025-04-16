@@ -1,5 +1,6 @@
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::option;
 use warp::{
     http::Response,
     Filter,
@@ -13,6 +14,8 @@ use std::io::Write;
 use tokio;
 use local_ip_address::local_ip;
 
+use crate::SpCommand;
+
 use super::Song;
 use super::super::TMP_DIR;
 
@@ -20,7 +23,7 @@ use super::super::TMP_DIR;
 const CLIENT_ID: &str = "72707970d9254ea1baf38fff45afed06";
 const CLIENT_SECRET: &str = "73715f9ba05b40e6890e1f7aab9d20e7";
 pub static SP_CACHE_PATH: &str = "./spotify_cache/spotify_token_cache.json";  //todo should not be needed
-static SP_GET_DELAY: u64 = 3;
+static SP_GET_DELAY: u64 = 5;
 
 pub async fn spotify_wait_for_token(auth: AuthCodeSpotify) -> Result<Token, String>{
     for _i in 0..60 {
@@ -150,7 +153,8 @@ pub async fn spotify_init() -> AuthCodeSpotify {
                 scopes: scopes!(
                     "user-read-currently-playing",
                     "playlist-modify-private",
-                    "playlist-modify-public"
+                    "playlist-modify-public",
+                    "streaming"
                 ),
                 redirect_uri: "http://iddisplay.local/callback".to_string(),
                 ..Default::default()
@@ -168,7 +172,8 @@ pub async fn spotify_init() -> AuthCodeSpotify {
                 scopes: scopes!(
                     "user-read-currently-playing",
                     "playlist-modify-private",
-                    "playlist-modify-public"
+                    "playlist-modify-public",
+                    "streaming"
                 ),
                 redirect_uri: "http://desktop.local/callback".to_owned(),
                 ..Default::default()
@@ -184,4 +189,64 @@ pub async fn spotify_qr(auth: AuthCodeSpotify) -> String{
     let qr = rspotify::AuthCodeSpotify::get_authorize_url(&auth, false).unwrap();
     //qr_code::Data::new(rspotify::AuthCodeSpotify::get_authorize_url(&self.sp_auth, false).unwrap()).unwrap(); //create login url
     qr
+}
+
+pub async fn spotify_execute(command: SpCommand, sp_auth: AuthCodeSpotify) -> String{
+    let spotify = sp_auth;
+    match command{
+        SpCommand::PlayPause => {
+            match spotify.current_playing(None,Some(vec![&AdditionalType::Track])).await {
+                Ok(current) => {
+                    if current != None{
+                        if current.unwrap().is_playing == false {
+                            match spotify.resume_playback(None,None ).await {
+                                Ok(_) => {}
+                                Err(e) => println!("Error {:?}", e),
+                            }
+                            return "ok".to_string()
+                        } else {
+                            match spotify.pause_playback(None).await {
+                                Ok(_) => {}
+                                Err(e) => println!("Error {:?}", e),
+                            }
+                            return "ok".to_string()
+                        }
+                    }
+                    "nothing playing".to_string()
+                }
+                Err(e) => {
+                    match spotify.refresh_token().await {
+                        Ok(_o) => {
+                            return e.to_string();
+                        }
+                        Err(e) => {
+                            return e.to_string();
+                        }
+                    }
+                }
+            }
+        }
+        SpCommand::NextSong => {
+            match spotify.next_track(None).await {
+                Ok(_) => {}
+                Err(e) => println!("Error {:?}", e),
+            }
+            "ok".to_string()
+        }
+        SpCommand::PrevSong => {
+            match spotify.previous_track(None).await {
+                Ok(_) => {}
+                Err(e) => println!("Error {:?}", e),
+            }
+            "ok".to_string()
+        }
+        SpCommand::Shuffle => {
+            match spotify.shuffle(true,None).await {
+                Ok(_) => {}
+                Err(e) => println!("Error {:?}", e),
+            }
+            "ok".to_string()
+        }
+    }
+        
 }

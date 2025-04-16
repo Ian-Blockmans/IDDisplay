@@ -1,6 +1,6 @@
 [package]
 name = "IDDisplay"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 
 [dependencies]
@@ -16,7 +16,7 @@ reqwest = { version = "0.12", features = ["blocking"] }
 local-ip-address = "0.6.3"
 tokio = { version = "1", features = ["full"] }
 #spotify
-rspotify = { version = "0.13.3"}
+rspotify = { version = "0.14"}
 warp = "0.3"
 
 [workspace.metadata.cross.target.aarch64-unknown-linux-gnu]

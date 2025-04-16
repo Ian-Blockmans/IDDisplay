@@ -9,7 +9,7 @@ It can display the current song by listening to sound and identifying it with Sh
 
 ## Install
 
-download and unzip the latest release and run the executable. The curently suported platforms are x86_64 windows and linux and amd64 linux.
+download and unzip the latest release and run the executable. The curently suported platforms are x86_64 windows and linux and arm64 linux.
 
 ## usage
 
