@@ -24,7 +24,7 @@ build:
     - echo "Building Release"
     - cargo build -r --verbose
     - ls -l
-    - echo "VERSION=$(yq '.package.version' Cargo.toml)" > build.env"
+    - echo "VERSION=$(yq '.package.version' Cargo.toml)" > build.env
     - mkdir IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay IDDisplay-v$(yq '.package.version' Cargo.toml)/
     - mkdir bin && cd bin
     - tar -czf IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz ../IDDisplay-v$(yq '.package.version' Cargo.toml)
