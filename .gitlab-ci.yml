@@ -44,7 +44,7 @@ upload:
     - if: $CI_COMMIT_BRANCH == "release"
   script:
     - |
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/linux-x86_64-IDDisplay-v$VERSION.tar.gz
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/linux-x86_64-IDDisplay-v$VERSION.tar.gz "${PACKAGE_REGISTRY_URL}/linux-x86_64-IDDisplay-v$VERSION.tar.gz"
 
 
 release:
