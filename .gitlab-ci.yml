@@ -37,6 +37,8 @@ build:
 
 upload:
   stage: upload
+  tags: 
+    - rust
   image: curlimages/curl:latest
   rules:
     - if: $CI_COMMIT_BRANCH == "release"
@@ -47,6 +49,9 @@ upload:
 
 release:
   stage: release
+  tags: 
+    - rust
+  image: rust:slim
   script:
     - echo "creating release"
   release:
