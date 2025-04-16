@@ -24,12 +24,12 @@ build:
     #- apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
     #- apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
     - echo "Building Release"
-    #- cargo build -r --verbose
+    - cargo build -r --verbose
     - ls -l
     - echo "VERSION=$(yq '.package.version' Cargo.toml)" > build.env
     - echo "LINUX_BINARY=linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz" >> build.env
-    #- mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
-    - mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    - mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    #- mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
     - tar -czf linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)
     - mkdir bin
     - mv linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz bin/
