@@ -32,7 +32,7 @@ build:
     - mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
     - tar -czf linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)
     - mkdir bin
-    - mv IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz bin/
+    - mv linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz bin/
   artifacts:
     reports:
       dotenv: build.env
