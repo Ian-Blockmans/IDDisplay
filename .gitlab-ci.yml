@@ -47,7 +47,7 @@ upload:
     - if: $CI_COMMIT_BRANCH == "release"
   script:
     - |
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/linux-x86_64-IDDisplay-v$VERSION.tar.gz "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION/$LINUX_BINARY"
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ./bin/linux-x86_64-IDDisplay-v$VERSION.tar.gz "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION/$LINUX_BINARY"
       echo "PACKAGE_REGISTRY_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION" >> build.env
   artifacts:
     reports:
