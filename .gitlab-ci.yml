@@ -27,10 +27,10 @@ build:
     #- cargo build -r --verbose
     - ls -l
     - echo "VERSION=$(yq '.package.version' Cargo.toml)" > build.env
-    - echo "LINUX_BINARY=IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz" >> build.env
-    #- mkdir IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay IDDisplay-v$(yq '.package.version' Cargo.toml)/
-    - mkdir IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 IDDisplay-v$(yq '.package.version' Cargo.toml)/
-    - tar -czf IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz IDDisplay-v$(yq '.package.version' Cargo.toml)
+    - echo "LINUX_BINARY=linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz" >> build.env
+    #- mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    - mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    - tar -czf linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)
     - mkdir bin
     - mv IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz bin/
   artifacts:
@@ -49,7 +49,7 @@ upload:
   script:
     - |
       ls ./bin/ -l
-      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file ./bin/linux-x86_64-IDDisplay-v$VERSION.tar.gz "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION/$LINUX_BINARY"
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/$LINUX_BINARY "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION/$LINUX_BINARY"
       echo "PACKAGE_REGISTRY_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION" >> build.env
   artifacts:
     reports:
