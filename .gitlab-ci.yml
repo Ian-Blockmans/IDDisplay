@@ -46,6 +46,7 @@ upload:
 
 release:
   stage: release
+  script:
   release:
     tag_name: v$VERSION
     description: "Release v$VERSION"
