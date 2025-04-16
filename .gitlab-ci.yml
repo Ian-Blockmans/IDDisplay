@@ -47,6 +47,7 @@ upload:
 release:
   stage: release
   script:
+    - echo "creating release"
   release:
     tag_name: v$VERSION
     description: "Release v$VERSION"
