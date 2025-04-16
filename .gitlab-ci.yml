@@ -59,7 +59,7 @@ release:
   stage: release
   tags: 
     - rust
-  image: rust:slim
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
   script:
     - echo "creating release"
   release:
