@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+//#![windows_subsystem = "windows"]
 use core::str;
 use std::env;
 use iced::{settings, window, Background, Border, Color, Shadow, Size, Task, Theme};
@@ -79,6 +79,14 @@ pub enum DisplayMode{
 }
 
 #[derive(Debug, Clone)]
+pub enum SpCommand {
+    PlayPause,
+    NextSong,
+    PrevSong,
+    Shuffle,
+}
+
+#[derive(Debug, Clone)]
 enum Message {
     Start(DisplayMode),
     Exit,
@@ -90,6 +98,8 @@ enum Message {
     SpAuthOk,
     SpAuthError(Result<Token, String>),
     SpModeToggle(bool),
+    SpExecute(SpCommand),
+    SpExecuteResult(String),
     ShazamMode(bool),
     ShazamFastMode(bool),
     Demo,
@@ -99,7 +109,7 @@ enum Message {
     Fullscreen,
     ShowMenu,
     HideMenu,
-    SwitchPage(AppPage)
+    SwitchPage(AppPage),
 //    Tick,
 }
 
@@ -116,6 +126,7 @@ struct App{
     sp_init_done: bool,
     sp_mode: bool,
     sp_poll_delay: u64,
+    sp_command: SpCommand,
     show_menu: bool,
     page: AppPage,
     sp_callback_handle: Option<tokio::task::JoinHandle<()>>,
@@ -144,8 +155,9 @@ impl App {
             sp_init_done: false,
             sp_mode: false,
             sp_poll_delay: 3,
+            sp_command: SpCommand::PlayPause,
             show_menu: false,
-            page: AppPage::Main,
+            page: AppPage::ShazamMain,
             sp_callback_handle: None,
             display_mode: DisplayMode::Shazam,
             shazam_fast: false,
@@ -170,6 +182,30 @@ impl App {
                 self.page = page;
                 match self.page {
                     AppPage::Main => {
+                        match self.display_mode {
+                            DisplayMode::Shazam => {
+                                Task::done(Message::SwitchPage(AppPage::ShazamMain))
+                            }
+                            DisplayMode::Spotify => {
+                                Task::done(Message::SwitchPage(AppPage::SpotifyMain))
+                            }
+                        }
+                    }
+                    AppPage::ShazamMain => {
+                        match &self.sp_callback_handle {
+                            Some(h)=>{
+                                h.abort();
+                                self.sp_callback_handle = None;
+                                if Token::from_cache(SP_CACHE_PATH).is_err(){
+                                    self.sp_init_done = false;
+                                }
+                            }
+                            None =>{}
+                        }
+                        self.show_menu = false;
+                        Task::none()
+                    }
+                    AppPage::SpotifyMain => {
                         match &self.sp_callback_handle {
                             Some(h)=>{
                                 h.abort();
@@ -363,6 +399,12 @@ impl App {
                     }
                 }
             },
+            Message::SpExecute(command) => {
+                Task::perform(spotify::spotify_execute(command, self.sp_auth.clone()), Message::SpExecuteResult)
+            },
+            Message::SpExecuteResult(res) => {
+                Task::none()
+            }
             Message::HideMenu => {
                 self.show_menu = false;
                 Task::none()
@@ -479,10 +521,20 @@ impl App {
             .on_press(Message::SwitchPage(AppPage::ShazamSettings))
             .style(Self::btntheme);
         
+        // spotify main window widgets
+        let play_pause = button("||/>")
+            .on_press(Message::SpExecute(SpCommand::PlayPause))
+            .style(Self::btntheme);
+        let next = button(">>|")
+            .on_press(Message::SpExecute(SpCommand::NextSong))
+            .style(Self::btntheme);
+        let prev = button("|<<")
+            .on_press(Message::SpExecute(SpCommand::PrevSong))
+            .style(Self::btntheme);
 
         //spotify login widgets
         let sp_back = button("cancel")
-        .on_press(Message::SwitchPage(AppPage::Main))
+        .on_press(Message::SwitchPage(AppPage::ShazamMain))
         .style(Self::btntheme);
         let spotify_qr_code = qr_code(&self.sp_auth_url_data);
         let login_message = text("if you get a prompt to allow network acces press allow. Scan qr code -> login with spotify account -> if you get a message like \" could not connect \" edit the link and replace \"iddisplay.local\" whit the ip below");
@@ -501,11 +553,42 @@ impl App {
             .label("Enable fast mode")
             .on_toggle(Message::ShazamFastMode);
 
-        let main_page = container(
-            column![
-            row![ column![ row![ detect,exit,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
-            row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),].height(Length::Fill),
-        ].height(Length::Fill));
+        //main pages
+        let shazam_main_page;
+        let spotify_main_page;
+        match self.display_mode {
+            DisplayMode::Spotify => {
+                spotify_main_page = container(
+                    column![
+                    row![ column![ row![ detect,exit,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+                    row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),].height(Length::Fill),
+                    row![ prev, play_pause, next],
+                ].height(Length::Fill));
+                let restart = text("restart app".to_string())
+                    .size(TEXT_SIZE)
+                    .center();
+                shazam_main_page = container(
+                    column![
+                    row![ restart ]
+                    ].height(Length::Fill));
+            }
+            DisplayMode::Shazam => {
+                shazam_main_page = container(
+                    column![
+                    row![ column![ row![ detect,exit,fullscreen ] ].padding(5).width(Length::FillPortion(2)),column![ menu ].padding(5).align_x(Alignment::End).width(Length::FillPortion(1))],
+                    row![ column![ trackname, artistname ].padding(40).width(Length::FillPortion(6)).align_x(Alignment::Start), column![coverart].align_x(Alignment::End).width(Length::FillPortion(4)),].height(Length::Fill),
+                ].height(Length::Fill));
+                let restart = text("restart app")
+                    .size(TEXT_SIZE)
+                    .center();
+                spotify_main_page = container(
+                    column![
+                    row![ restart ]
+                ].height(Length::Fill));
+            }
+        }   
+
+
         
         match self.page {
             AppPage::Main => {
@@ -514,9 +597,20 @@ impl App {
                 column![ spotify,
                                   shazam,
                             ]);
-                    sidebar(main_page, menu, Message::HideMenu)
+                    sidebar(shazam_main_page, menu, Message::HideMenu)
                 } else {
-                    main_page.into()
+                    shazam_main_page.into()
+                }
+            }
+            AppPage::ShazamMain => {
+                if self.show_menu {
+                    let menu = container(
+                column![ spotify,
+                                  shazam,
+                            ]);
+                    sidebar(shazam_main_page, menu, Message::HideMenu)
+                } else {
+                    shazam_main_page.into()
                 }
             }
             AppPage::ShazamSettings => {
@@ -529,6 +623,17 @@ impl App {
                 .width(Length::Fill)
                 .padding(20);
                 shazam_settings_page.into()
+            }
+            AppPage::SpotifyMain => {
+                if self.show_menu {
+                    let menu = container(
+                column![ spotify,
+                                  shazam,
+                            ]);
+                    sidebar(spotify_main_page, menu, Message::HideMenu)
+                } else {
+                    spotify_main_page.into()
+                }
             }
             AppPage::SpotifyLogin => {
                 let sp_login_page = column![
@@ -558,7 +663,9 @@ impl App {
 #[derive(Debug, Clone)]
 enum AppPage {
     Main,
+    ShazamMain,
     ShazamSettings,
+    SpotifyMain,
     SpotifyLogin,
     SpotifySettings,
 }

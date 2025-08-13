@@ -1,0 +1,73 @@
+stages:
+  - build
+  - upload
+  - release
+
+variables:
+  VERSION: "0.1"
+  LINUX_AMD64_BINARY: "changeme in automation"
+  PACKAGE_REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/myawesomerelease/${PACKAGE_VERSION}"
+
+build:
+  stage: build
+  tags: 
+    - rust
+  rules:
+    - if: $CI_COMMIT_BRANCH == "release"
+  image: rust:slim
+  script:
+    - echo "installing dependencies"
+    - apt-get update && apt-get install --assume-yes build-essential pkg-config libssl-dev libasound2-dev wget
+    - wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq &&\
+    - chmod +x /usr/bin/yq
+    #- apk update
+    #- apk add pkgconf build-base alsa-lib-dev libsoundio-dev 
+    #- apk add libressl-dev=~3 --repository=http://dl-cdn.alpinelinux.org/alpine/v3.20/community
+    - echo "Building Release"
+    - cargo build -r --verbose
+    - ls -l
+    - echo "VERSION=$(yq '.package.version' Cargo.toml)" > build.env
+    - echo "LINUX_BINARY=linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz" >> build.env
+    - mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 target/release/IDDisplay linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    #- mkdir linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml) && cp -r unknown.png lx-dist-x86_64 linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)/
+    - tar -czf linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml)
+    - mkdir bin
+    - mv linux-x86_64-IDDisplay-v$(yq '.package.version' Cargo.toml).tar.gz bin/
+  artifacts:
+    reports:
+      dotenv: build.env
+    paths:
+      - bin/
+
+upload:
+  stage: upload
+  tags: 
+    - rust
+  image: curlimages/curl:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "release"
+  script:
+    - |
+      ls ./bin/ -l
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file bin/$LINUX_BINARY "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION/$LINUX_BINARY"
+      echo "PACKAGE_REGISTRY_URL=${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/IDDisplay/$VERSION" >> build.env
+  artifacts:
+    reports:
+      dotenv: build.env
+
+release:
+  stage: release
+  tags: 
+    - rust
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  script:
+    - echo "creating release"
+  release:
+    tag_name: v$VERSION
+    description: "Release v$VERSION"
+    assets:
+      links:
+        - name: linux-x86_64-release
+          url: ${PACKAGE_REGISTRY_URL}/${LINUX_BINARY}
+
+    
