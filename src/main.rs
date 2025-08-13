@@ -485,7 +485,7 @@ impl App {
         .on_press(Message::SwitchPage(AppPage::Main))
         .style(Self::btntheme);
         let spotify_qr_code = qr_code(&self.sp_auth_url_data);
-        let login_message = text("if you get a prompt to allow network acces press allow. Scan qr code -> login with spotify account -> if you get a message like \" could not connect \" edit the link and replace \"iddisplay.local whit the ip below\"");
+        let login_message = text("if you get a prompt to allow network acces press allow. Scan qr code -> login with spotify account -> if you get a message like \" could not connect \" edit the link and replace \"iddisplay.local\" whit the ip below");
         let ip = text(local_ip().unwrap().to_string());
 
         //spotify settings widgets

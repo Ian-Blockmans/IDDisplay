@@ -170,7 +170,7 @@ pub async fn spotify_init() -> AuthCodeSpotify {
                     "playlist-modify-private",
                     "playlist-modify-public"
                 ),
-                redirect_uri: "http://desktop.local/callback".to_owned(),
+                redirect_uri: "http://iddisplay.local/callback".to_owned(),
                 ..Default::default()
             };
             let creds = Credentials::new(CLIENT_ID, CLIENT_SECRET);

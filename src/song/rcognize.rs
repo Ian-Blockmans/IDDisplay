@@ -9,7 +9,7 @@ use core::str;
 use serde_json::Value;
 use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{FromSample, Sample};
+use cpal::{FromSample, Sample, Stream};
 use std::sync::{Arc, Mutex};
 use std::fs::File;
 use std::io::BufWriter;
@@ -23,6 +23,10 @@ static WAIT_WHEN_CORRECT: u64 = 20;
 static WAIT_REC: u64 = 3; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
+
+struct SendStream(Stream);
+// they see me Send-ing, they hatin'
+unsafe impl Send for SendStream {}
 
 pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<Song, String>{
     if correct == true && fast == false {
@@ -238,42 +242,43 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let err_fn = move |err| {
         println!("an error occurred on stream: {}", err);
     };
-
-    let stream = match config.sample_format() {
-        cpal::SampleFormat::I8 => device.build_input_stream(
-            &config.into(),
-             move |data, _: &_| write_input_data::<i8, i8>(data, &writer_2),
-            err_fn,
-            None,
-        )?,
-        cpal::SampleFormat::I16 => device.build_input_stream(
-            &config.into(),
-            move |data, _: &_| write_input_data::<i16, i16>(data, &writer_2),
-            err_fn,
-            None,
-        )?,
-        cpal::SampleFormat::I32 => device.build_input_stream(
-            &config.into(),
-            move |data, _: &_| write_input_data::<i32, i32>(data, &writer_2),
-            err_fn,
-            None,
-        )?,
-        cpal::SampleFormat::F32 => device.build_input_stream(
-            &config.into(),
-            move |data, _: &_| write_input_data::<f32, f32>(data, &writer_2),
-            err_fn,
-            None,
-        )?,
-        sample_format => {
-            return Err(anyhow::Error::msg(format!(
-                "Unsupported sample format '{sample_format}'"
-            )))
-        }
-    };
-
+    let stream = 
+        match config.sample_format() {
+            cpal::SampleFormat::I8 => device.build_input_stream(
+                &config.into(),
+                 move |data, _: &_| write_input_data::<i8, i8>(data, &writer_2),
+                err_fn,
+                None,
+            )?,
+            cpal::SampleFormat::I16 => device.build_input_stream(
+                &config.into(),
+                move |data, _: &_| write_input_data::<i16, i16>(data, &writer_2),
+                err_fn,
+                None,
+            )?,
+            cpal::SampleFormat::I32 => device.build_input_stream(
+                &config.into(),
+                move |data, _: &_| write_input_data::<i32, i32>(data, &writer_2),
+                err_fn,
+                None,
+            )?,
+            cpal::SampleFormat::F32 => device.build_input_stream(
+                &config.into(),
+                move |data, _: &_| write_input_data::<f32, f32>(data, &writer_2),
+                err_fn,
+                None,
+            )?,
+            sample_format => {
+                return Err(anyhow::Error::msg(format!(
+                    "Unsupported sample format '{sample_format}'"
+                )))
+            }
+        };
+        
     stream.play()?;
+    //let stream = Arc::new(Mutex::new(stream));
 
-    // Let recording go for roughly three seconds.
+    // Let recording go for some seconds.
 
     std::thread::sleep(std::time::Duration::from_secs(time_s));
     //tokio::time::sleep(std::time::Duration::from_secs(time_s)).await;
