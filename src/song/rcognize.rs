@@ -23,6 +23,7 @@ static WAIT_WHEN_CORRECT: u64 = 20;
 static WAIT_REC: u64 = 3; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
 static OS: &str = env::consts::OS;
 static ARCHITECTURE: &str = env::consts::ARCH;
+pub static CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<Song, String>{
     if correct == true && fast == false {
@@ -41,10 +42,11 @@ pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<S
     while tracksong.as_ref().unwrap().track_name == "nosong" && count <= 3 && tracksong.is_ok(){
         count += 1;
         rectime *= 2;
-        
-        rec = rec_wav(tmpdir.clone(), rectime).await; //record audio
+
+        rec = rec_wav(tmpdir.clone(), rectime); //record audio
         if rec.is_err(){
-            panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
+            return Err(rec.err().unwrap().to_string());
+            //panic!("{}", rec.unwrap_err()); //panic when program fails to record audio
         }
         tracksong = shazamrec(tmp_dir.clone()).await; //try to recognize song
         if tracksong.is_err() {
@@ -167,7 +169,7 @@ struct Opt {
     jack: bool,
 }
 
-async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
+fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
     let opt = Opt::parse();
 
     // Conditionally compile with jack if the feature is specified.
@@ -275,7 +277,14 @@ async fn rec_wav(tmp_dir: String, time_s: u64) -> Result<(), anyhow::Error>{
 
     // Let recording go for roughly three seconds.
 
-    std::thread::sleep(std::time::Duration::from_secs(time_s));
+    for _ in 0..time_s*1000 {
+        if CANCELLED.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(anyhow::Error::msg("cancelled"));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+    
+    //std::thread::sleep(std::time::Duration::from_secs(time_s));
     //tokio::time::sleep(std::time::Duration::from_secs(time_s)).await;
 
     drop(stream);

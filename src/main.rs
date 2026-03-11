@@ -243,6 +243,7 @@ impl App {
                 Task::done(Message::DisplaySong(Ok(self.song.clone())))
             }
             Message::Exit => {
+                rcognize::CANCELLED.store(true, std::sync::atomic::Ordering::Relaxed);
                 iced::exit::<Message>()
             },
             Message::DisplaySong(song) => {
