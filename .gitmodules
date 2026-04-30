@@ -2,3 +2,6 @@
 	path = shazamrs
 	url = https://github.com/qmilloy/shazamrs
 
+[submodule "shazamrs-core"]
+	path = shazamrs-core
+	url = https://github.com/qmilloy/shazamrs-core
