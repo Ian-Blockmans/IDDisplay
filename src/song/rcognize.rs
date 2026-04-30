@@ -64,25 +64,24 @@ async fn shazamrec(tmp_dir: String) -> Result<Song, String> {
 
     let shazam = Shazam::with_segment_duration(5);
 
-    let response = shazam.recognize_path(tmp_dir.clone()+"recorded.wav").await?;
+    let response = shazam.recognize_path(tmp_dir.clone()+"recorded.wav").await.map_err(|e| e.to_string())?;
 
     if let Some(track) = response.track {
-        let imgurl;
-        if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
-            imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
-            //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
-        } else {
-            imgurl = "";
-        }
         
         let mut song = Song::default();
-        song.track_name = track.title.clone();
-        song.artist_name = track.artists.clone();
-        song.art_url = track.images.coverart.clone();
+        song.track_name = track.title.unwrap().clone();
+        //for artist in track.artists.unwrap().iter(){
+        //    song.artist_name.push_str(&artist.adamid.clone().unwrap_or("".to_string()));
+        //    song.artist_name.push_str(", ");
+        //}
+        song.artist_name = track.subtitle.unwrap_or_default();
+        song.art_url = track.images.unwrap().coverart.unwrap().clone();
         Ok(song)
     } else {
         println!("Got response but there was no track: {:?}", response);
-        Err("Got response but there was no track".to_string())
+        let mut song = Song::default();
+        song.track_name = "nosong".to_string();
+        Ok(song)
     }
 
 //    let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain

@@ -4,7 +4,7 @@
 
 ## about
 
-This is a gui for song recognition using [ShazamIO](https://github.com/shazamio/ShazamIO) written in rust. The gui library i used is [iced](https://github.com/iced-rs/iced/tree/master).
+This is a minimal gui for song recognition using a fork of [ShazamIO](https://github.com/shazamio/ShazamIO) called [shazamrs](https://github.com/qmilloy/shazamrs)/[shazamrs-core](https://github.com/qmilloy/shazamrs-core) written in rust. The gui library i used is [iced](https://github.com/iced-rs/iced/tree/master).
 It can display the current song by listening to sound and identifying it with Shazam. Or you can login with spotify and display the currently playing song on your account,
 
 ## Install
