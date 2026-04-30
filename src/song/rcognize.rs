@@ -18,6 +18,8 @@ use tokio;
 use super::Song;
 use super::get_image;
 
+use shazamrs::{Shazam, ShazamError};
+
 static REC_TIME_S: u64 = 3;
 static WAIT_WHEN_CORRECT: u64 = 20;
 static WAIT_REC: u64 = 3; //wait to slow down recognition, i don't want to spam shazam, might not be necessairy 
@@ -36,7 +38,7 @@ pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<S
     let tmpdir = tmp_dir.clone();
     let mut rectime = REC_TIME_S;
     let mut rec: std::result::Result<(), anyhow::Error>;
-    let mut tracksong: Result<Song, anyhow::Error> = Ok(Song::default());
+    let mut tracksong: Result<Song, String> = Ok(Song::default());
     let mut count = 0;
 
     while tracksong.as_ref().unwrap().track_name == "nosong" && count <= 3 && tracksong.is_ok(){
@@ -50,100 +52,75 @@ pub async fn startrecasy(correct: bool, tmp_dir: String, fast: bool) -> Result<S
         }
         tracksong = shazamrec(tmp_dir.clone()).await; //try to recognize song
         if tracksong.is_err() {
-            return Err(tracksong.err().unwrap().to_string());
+            return Err(tracksong.err().unwrap());
         }
         tokio::time::sleep(std::time::Duration::from_micros(1)).await; //exit point for tokio
     }
     Ok(tracksong.unwrap())
 
 }
-#[cfg(target_os = "windows")]
-async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
-    let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
 
-    output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe").creation_flags(0x08000000)
-        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
-//      .args(["ShazamIO.py", "song.wav"])
-        .output()?;
+async fn shazamrec(tmp_dir: String) -> Result<Song, String> {
 
-    let pyerrout = str::from_utf8(&output.stderr).unwrap();
-    if pyerrout.is_empty(){
-        let jstring = str::from_utf8(&output.stdout)?.to_string();
-        println!("song: {}", jstring);
-        let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
-        if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
-            let mut nosong = Song::default();
-            nosong.track_name = "nosong".to_string();
-            Ok(nosong)
-        } else { // populate Song whit corect values
-            let imgurl;
-            if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
-                imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
-                //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
-            } else {
-                imgurl = "";
-            }
-            
-            let mut song = Song::default();
-            song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
-            song.artist_name = shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string();
-            song.art_url = imgurl.to_string();
-            Ok(song)
+    let shazam = Shazam::with_segment_duration(5);
+
+    let response = shazam.recognize_path(tmp_dir.clone()+"recorded.wav").await?;
+
+    if let Some(track) = response.track {
+        let imgurl;
+        if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
+            imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
+            //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
+        } else {
+            imgurl = "";
         }
-    } else{
-        let errorout = str::from_utf8(&output.stderr)?.to_owned();
-        println!("Error: {}", errorout);
-        Err(anyhow::Error::msg(errorout))
-    }
-   
-}
-
-#[cfg(target_os = "linux")]
-async fn shazamrec(tmp_dir: String) -> Result<Song, anyhow::Error> {
-    let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
-    // use the right python envirement for architecture
-    
-    if ARCHITECTURE == "aarch64" {
-        output = Command::new("./lx-dist-aarch64/ShazamIO/ShazamIO")
-        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
-//      .args(["ShazamIO.py", "song.wav"])
-        .output()?;
-    } else if ARCHITECTURE == "x86_64" {
-        output = Command::new("./lx-dist-x86_64/ShazamIO/ShazamIO")
-        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
-//      .args(["ShazamIO.py", "song.wav"])
-        .output()?;
+        
+        let mut song = Song::default();
+        song.track_name = track.title.clone();
+        song.artist_name = track.artists.clone();
+        song.art_url = track.images.coverart.clone();
+        Ok(song)
+    } else {
+        println!("Got response but there was no track: {:?}", response);
+        Err("Got response but there was no track".to_string())
     }
 
-    let pyerrout = str::from_utf8(&output.stderr).unwrap();
-    if pyerrout.is_empty(){
-        let jstring = str::from_utf8(&output.stdout)?.to_string();
-        println!("song: {}", jstring);
-        let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
-        if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
-            let mut nosong = Song::default();
-            nosong.track_name = "nosong".to_string();
-            Ok(nosong)
-        } else { // populate Song whit corect values
-            let imgurl;
-            if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
-                imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
-                //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
-            } else {
-                imgurl = "";
-            }
-            
-            let mut song = Song::default();
-            song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
-            song.artist_name = shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string();
-            song.art_url = imgurl.to_string();
-            Ok(song)
-        }
-    } else{
-        let errorout = str::from_utf8(&output.stderr)?.to_owned();
-        println!("Error: {}", errorout);
-        Err(anyhow::Error::msg(errorout))
-    }
+//    let mut output: std::process::Output = std::process::Output{status: std::process::ExitStatus::default(), stdout: vec![0],stderr: vec![0]}; //init with empty so the compiler does not complain
+//
+//    output = Command::new("./win-dist-x86_64/ShazamIO/ShazamIO.exe").creation_flags(0x08000000)
+//        .args([(tmp_dir.clone()+"recorded.wav").as_str()])
+////      .args(["ShazamIO.py", "song.wav"])
+//        .output()?;
+//
+//    let pyerrout = str::from_utf8(&output.stderr).unwrap();
+//    if pyerrout.is_empty(){
+//        let jstring = str::from_utf8(&output.stdout)?.to_string();
+//        println!("song: {}", jstring);
+//        let shazam_json_p: Value = serde_json::from_str(&jstring).unwrap();
+//        if !shazam_json_p["track"]["title"].is_string(){ // write No song detected to songname when no song was detected
+//            let mut nosong = Song::default();
+//            nosong.track_name = "nosong".to_string();
+//            Ok(nosong)
+//        } else { // populate Song whit corect values
+//            let imgurl;
+//            if !shazam_json_p["track"]["images"]["coverart"].as_str().is_none() { //if image is available
+//                imgurl = shazam_json_p["track"]["images"]["coverart"].as_str().unwrap();
+//                //imgpath = get_image(shazam_json_p["track"]["images"]["coverart"].as_str().unwrap(), shazam_json_p["track"]["title"].as_str().unwrap().replace(" ", "_") + ".jpg" ).await.unwrap();
+//            } else {
+//                imgurl = "";
+//            }
+//            
+//            let mut song = Song::default();
+//            song.track_name = shazam_json_p["track"]["title"].as_str().unwrap().to_string();
+//            song.artist_name = shazam_json_p["track"]["subtitle"].as_str().unwrap().to_string();
+//            song.art_url = imgurl.to_string();
+//            Ok(song)
+//        }
+//    } else{
+//        let errorout = str::from_utf8(&output.stderr)?.to_owned();
+//        println!("Error: {}", errorout);
+//        Err(anyhow::Error::msg(errorout))
+//    }
    
 }
 
